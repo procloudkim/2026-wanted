@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>갱신 기준선 — 전월세 갱신 조건이 실거래 분포 어디쯤인지</title>
+<meta name="description" content="집주인이 제시한 갱신 조건이 같은 단지·평형의 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인합니다. 판정은 코드가 하고, 숫자는 만들어 내지 않습니다.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230F172A'/><path d='M7 22V10M13 22v-7M19 22v-11M25 22v-4' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="shell">
+  <div class="wrap bar">
+    <span class="brand">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9M10 20v-6M16 20v-9M22 20v-4"/></svg>
+      갱신 기준선
+    </span>
+    <span class="asof" id="asof-bar">데이터 기준일 <b id="asof">—</b></span>
+  </div>
+</header>
+
+<div class="wrap" id="deadline-bar" hidden role="status"></div>
+
+<main id="main" class="wrap">
+
+  <section class="hero">
+    <h1>제시받은 갱신 조건이<br>실제 갱신 계약들 사이에서 <em>어디쯤</em>인지 봅니다.</h1>
+    <p class="lede">
+      판정은 코드가 합니다. 언어 모델은 문장을 읽고 문장을 쓰는 두 단계만 맡고 <strong>숫자를 만들지 않습니다</strong>.
+      표본이 없으면 만들어 내지 않고 <strong>판정 불가로 끝냅니다</strong>.
+    </p>
+    <dl class="anchors" id="anchors" aria-label="서울 전체 집계">
+      <div><dt>갱신요구권 행사 기록 있음</dt><dd><b id="a-rec-over">—</b><span id="a-rec-n">—</span></dd></div>
+      <div><dt>행사 기록 없음</dt><dd><b id="a-unrec-over">—</b><span id="a-unrec-n">—</span></dd></div>
+      <div><dt>초과 차액 건당 중앙값</dt><dd><b id="a-excess">—</b><span>행사 기록 없는 초과 건</span></dd></div>
+    </dl>
+    <p class="anchor-note" id="anchor-scope">—</p>
+  </section>
+
+  <!-- ── S1 계약 입력 ─────────────────────────────────────────────────── -->
+  <section class="card" id="s1">
+    <h2><span class="step">1</span> 계약 입력</h2>
+    <p class="note">
+      입력은 이 7개뿐입니다. <strong>이름·연락처·동·호수·계약서 파일은 받지 않습니다.</strong>
+      넣으신 값은 이 브라우저에만 저장되고, 판정은 브라우저 안에서 끝납니다.
+    </p>
+
+    <form id="form" novalidate>
+      <div class="grid">
+        <p class="field">
+          <label for="kind">주택 유형</label>
+          <select id="kind" required>
+            <option value="아파트">아파트</option>
+            <option value="오피스텔">오피스텔</option>
+            <option value="연립다세대">연립·다세대</option>
+            <option value="단독다가구">단독·다가구</option>
+          </select>
+          <small class="help" id="kind-help">단독·다가구와 연립·다세대는 같은 동네·비슷한 면적 기준으로 비교합니다.</small>
+        </p>
+        <p class="field">
+          <label for="gu">자치구</label>
+          <select id="gu" required><option value="">선택하세요</option><option value="OUT">서울 밖입니다</option></select>
+          <small class="err" id="gu-err" hidden></small>
+        </p>
+        <p class="field">
+          <label for="dong">법정동</label>
+          <select id="dong" required disabled><option value="">자치구를 먼저 고르세요</option></select>
+          <small class="err" id="dong-err" hidden></small>
+        </p>
+        <p class="field" id="bldg-field">
+          <label for="bldg">건물명</label>
+          <input id="bldg" list="bldg-list" autocomplete="off" placeholder="예: 성산시영" maxlength="40">
+          <datalist id="bldg-list"></datalist>
+          <small class="help" id="bldg-help">목록에서 고르면 그 단지 기준으로 비교합니다.</small>
+          <small class="err" id="bldg-err" hidden></small>
+        </p>
+        <p class="field">
+          <label for="area">전용면적 <span class="unit">㎡</span></label>
+          <input id="area" type="number" inputmode="decimal" step="0.01" min="10" max="300" placeholder="59.94" required>
+          <small class="err" id="area-err" hidden></small>
+        </p>
+        <p class="field">
+          <label for="expiry">계약 만기일</label>
+          <input id="expiry" type="date" required>
+          <small class="err" id="expiry-err" hidden></small>
+        </p>
+        <p class="field">
+          <label for="dep">현재 보증금 <span class="unit">만원</span></label>
+          <input id="dep" type="text" inputmode="numeric" placeholder="60000" required>
+          <small class="help">6억원이면 60000</small>
+          <small class="err" id="dep-err" hidden></small>
+        </p>
+        <p class="field">
+          <label for="rent">현재 월세 <span class="unit">만원</span></label>
+          <input id="rent" type="text" inputmode="numeric" value="0" required>
+          <small class="help">전세면 0</small>
+          <small class="err" id="rent-err" hidden></small>
+        </p>
+      </div>
+
+      <fieldset class="offer">
+        <legend>제시받은 조건</legend>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-tab="amount">금액으로</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="rate">인상률로</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="text">받은 문장 붙여넣기</button>
+        </div>
+
+        <div class="tabpane" data-pane="amount">
+          <div class="grid two">
+            <p class="field">
+              <label for="odep">제시 보증금 <span class="unit">만원</span></label>
+              <input id="odep" type="text" inputmode="numeric" placeholder="64800">
+            </p>
+            <p class="field">
+              <label for="orent">제시 월세 <span class="unit">만원</span></label>
+              <input id="orent" type="text" inputmode="numeric" value="0">
+            </p>
+          </div>
+          <small class="err" id="offer-err" hidden></small>
+        </div>
+
+        <div class="tabpane" data-pane="rate" hidden>
+          <p class="field">
+            <label for="orate">인상률 <span class="unit">%</span></label>
+            <input id="orate" type="number" step="0.01" min="-50" max="100" placeholder="8.00">
+          </p>
+          <p class="confirm" id="rate-confirm" hidden></p>
+        </div>
+
+        <div class="tabpane" data-pane="text" hidden>
+          <p class="field">
+            <label for="otext">집주인에게 받은 문장</label>
+            <textarea id="otext" rows="3" maxlength="1000" placeholder="전세 3억5천인데 3억8천으로 올려달라고 하시네요"></textarea>
+            <small class="help">읽어서 금액으로 바꾸기만 합니다. <strong>원문은 저장하지 않습니다.</strong></small>
+          </p>
+          <button type="button" class="btn ghost" id="parse-btn">문장에서 금액 읽기</button>
+          <p class="confirm" id="parse-out" hidden></p>
+        </div>
+      </fieldset>
+
+      <details class="more">
+        <summary>선택 입력 3개 — 해당하면 판정이 달라집니다</summary>
+        <div class="grid">
+          <p class="field">
+            <label for="signed">계약 체결일</label>
+            <input id="signed" type="date">
+            <small class="help">2020년 12월 10일 이전이면 마감 기준이 다를 수 있습니다.</small>
+          </p>
+          <p class="field">
+            <label for="used">갱신요구권을 이미 쓴 적이 있습니까</label>
+            <select id="used"><option value="모름">모름</option><option value="예">예</option><option value="아니오">아니오</option></select>
+          </p>
+          <p class="field">
+            <label for="notice">임대인에게 만료·실거주 통보를 받았습니까</label>
+            <select id="notice">
+              <option value="모름">모름</option>
+              <option value="만료">만료 통보를 받았다</option>
+              <option value="실거주">실거주하겠다는 통보를 받았다</option>
+              <option value="아니오">받지 않았다</option>
+            </select>
+          </p>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="submit" class="btn primary">판정하기</button>
+        <button type="button" class="btn ghost" id="clear-btn">입력 지우기</button>
+      </div>
+    </form>
+  </section>
+
+  <div id="result" hidden>
+    <!-- 모드 결말 문장 (M-01 ~ M-09) -->
+    <section class="card mode" id="mode-card" hidden><h2 id="mode-title"></h2><p id="mode-text"></p></section>
+
+    <!-- ── S2 기준선 ─────────────────────────────────────────────────── -->
+    <section class="card" id="s2" hidden>
+      <h2><span class="step">2</span> 기준선 — 법정 기한</h2>
+      <div id="timeline"></div>
+      <div class="paths" id="paths"></div>
+      <div class="rowbtns">
+        <button type="button" class="btn ghost" id="ics-btn">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 012 2v11a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
+          마감일 캘린더 파일 내려받기
+        </button>
+      </div>
+    </section>
+
+    <!-- ── S3 판정 ───────────────────────────────────────────────────── -->
+    <section class="card" id="s3" hidden>
+      <h2><span class="step">3</span> 판정 — 제시 조건 대조</h2>
+      <div id="verdict"></div>
+      <div id="cohort"></div>
+      <div id="groups"></div>
+      <p class="legal">
+        <strong>5% 상한은 갱신요구권을 행사한 갱신에 적용되고, 합의로 맺은 갱신에는 적용되지 않습니다.</strong>
+        화면의 &ldquo;초과 차액&rdquo;은 <strong>위법 금액이 아니라</strong>, 갱신요구권을 행사했을 때의 상한과 제시받은 조건의 차이입니다.
+      </p>
+    </section>
+
+    <!-- ── S4 이탈 비용 ──────────────────────────────────────────────── -->
+    <section class="card" id="s4" hidden>
+      <h2><span class="step">4</span> 나가면 얼마를 더 내야 하나</h2>
+      <div id="market"></div>
+      <p class="legal">
+        이 차액에는 <strong>이사비·중개보수·대출 조건이 들어 있지 않고</strong>, 그 값에 실제 매물이 있는지도 이 데이터는 답하지 않습니다. 차액이 곧 이득은 아닙니다.
+      </p>
+    </section>
+
+    <!-- ── S7 환산 ───────────────────────────────────────────────────── -->
+    <section class="card" id="s7" hidden>
+      <h2><span class="step">4</span> 환산 — 월세가 섞인 조건</h2>
+      <div id="convert"></div>
+    </section>
+
+    <!-- ── S5 선택 기록과 문안 ───────────────────────────────────────── -->
+    <section class="card" id="s5" hidden>
+      <h2><span class="step">5</span> 선택 기록과 문안</h2>
+      <p class="note">마감 전에 <strong>행사 / 합의 / 무행동</strong> 중 하나를 고르는 것이 이 화면의 목적입니다. 고르지 않고 마감을 넘기는 것이 가장 비싼 결과입니다.</p>
+      <div class="choices" id="choices" role="group" aria-label="선택 기록">
+        <button type="button" class="choice" data-choice="행사">갱신요구권을 행사한다</button>
+        <button type="button" class="choice" data-choice="합의">합의로 갱신한다</button>
+        <button type="button" class="choice" data-choice="무행동">아직 정하지 않았다</button>
+      </div>
+      <p class="chosen" id="chosen" hidden></p>
+      <div class="draft">
+        <div class="rowbtns">
+          <button type="button" class="btn primary" id="draft-btn">이 숫자로 회신 문안 만들기</button>
+          <button type="button" class="btn ghost" id="copy-btn" hidden>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            복사
+          </button>
+        </div>
+        <div id="draft-out" hidden></div>
+      </div>
+      <p class="legal">
+        이 화면은 <strong>실거주 주장의 진위, 계약서 문구와 특약의 효력, 권리 성립 여부를 판정하지 않습니다.</strong>
+        이 서비스가 만든 문안은 법률 문서가 아니며 도달 여부와 효력도 판정하지 않습니다.
+      </p>
+    </section>
+
+    <!-- ── S6 3관문 ──────────────────────────────────────────────────── -->
+    <section class="card" id="s6" hidden>
+      <h2><span class="step">6</span> 계약 후 3관문</h2>
+      <p class="note">계약 만기와 별도로 등록해야 하는 날짜 3개입니다. 계약일에 몰아서 처리되지 않습니다.</p>
+      <ul class="gates" id="gates"></ul>
+    </section>
+  </div>
+</main>
+
+<footer class="wrap foot">
+  <h2 class="sr">데이터 한계와 법률 경계</h2>
+  <ol class="limits" id="limits">
+    <li>이 판정의 데이터 기준일은 <b id="f-asof">—</b>입니다. 최근 계약일수록 갱신/신규 판정이 덜 채워져 있어(<code>계약구분</code> 공란 2026년 2.32% 대 2025년 8.45%) <strong>최근 30일 계약은 표본에서 빠질 수 있습니다.</strong></li>
+    <li>계산 범위는 <strong>서울</strong>입니다. 서울 숫자를 다른 지역에 적용하지 않습니다.</li>
+    <li>서울시 파일에서 <strong>단독·다가구는 422,672행 중 106,596행(25.22%)의 본번·부번·건물명·층이 비어 있어</strong> 물건을 특정할 수 없습니다.</li>
+    <li>이 숫자들은 <strong>신고된 결과이지 예측이 아닙니다.</strong> 앞으로의 시세도, 협상의 결과도 예측하지 않습니다.</li>
+    <li id="limit-5" hidden><strong>&ldquo;행사 기록 없음&rdquo;은 갱신 계약의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong> 법정 신고서 서식이 갱신 계약에 대해 행사/미행사 2지 택일만 두고 있고 데이터 생산기관도 빈 값을 미사용으로 집계하므로 미행사로 읽지만(근거 등급 B), 공표 데이터에 미기재가 섞여 있어도 데이터만으로는 분리되지 않습니다. 신규 계약 행은 이 칸이 100% 비어 있고 그 빈 값은 &lsquo;해당 없음&rsquo;이라 <strong>이 집계에서 제외했습니다.</strong></li>
+    <li id="limit-6" hidden>위 5% 초과 비율은 <strong>월세가 0인 전세→전세 계약만</strong>으로 계산했습니다. 월세를 환산해 포함하면 <strong>35~46%</strong> 사이에서 흔들립니다.</li>
+  </ol>
+  <p class="legal strong">
+    이 서비스는 신고된 실거래 데이터로 <strong>계약의 위치를 숫자로 보여 줍니다. 법률 자문을 하지 않습니다.</strong>
+    법 조항은 원문과 출처를 그대로 보여 주고 링크만 겁니다. 판단이 필요하면
+    <a href="https://www.hujeong.or.kr/" target="_blank" rel="noopener">주택임대차분쟁조정위원회</a>,
+    <a href="https://www.klac.or.kr/" target="_blank" rel="noopener">대한법률구조공단(☎132)</a>,
+    <a href="https://www.seoul.go.kr/" target="_blank" rel="noopener">서울시 전월세보증금지원센터</a>로 가세요.
+  </p>
+  <p class="src">
+    출처 — 국토교통부 전월세 실거래가(아파트·연립다세대·단독다가구·오피스텔, 이용허락 제한 없음),
+    서울시 부동산 전월세가 정보(공공누리 1유형).
+    법 조문 — <a href="https://www.law.go.kr/법령/주택임대차보호법" target="_blank" rel="noopener">주택임대차보호법</a> 제6조의3·제7조.
+  </p>
+</footer>
+
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

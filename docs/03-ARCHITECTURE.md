@@ -171,20 +171,32 @@
 - **왜**: 정적 호스팅과 서버리스 함수가 한 곳에서 무료이고 콜드스타트가 없다. LLM 키를 브라우저에 노출할 수 없어 함수가 반드시 필요하므로 정적 전용 호스팅은 애초에 후보가 아니다.
 - **대안과 트레이드오프**: Vercel 무료 플랜은 기능이 충분하고 개발 경험도 더 매끄럽지만, 무료 플랜이 **비상업 용도로 한정**되어 제품의 장래 성격에 제약을 건다. 성격이 바뀌면 이전 비용이 생긴다.
 
-### What — 산출물
+### What — 산출물 (2026-09-18 실측)
 
 ```text
 dist/
-├── index.html                  캐시 없음(항상 재검증)
-├── assets/app.<hash>.js|css    불변 캐시
-├── data/
-│   ├── manifest.json           기준일·행 수·채움률·집계 버전. 캐시 짧게
-│   ├── anchors.json            서울 전체 상수
-│   ├── index/buildings.json    자치구·법정동·건물명 인덱스
-│   └── cohorts/<자치구>.<hash>.json   불변 캐시
-└── functions/
-    └── api/compose.js          Cloudflare Functions 규약(파일 경로 = 라우트)
+├── index.html                  화면 하나. 섹션 7개가 같은 판정 딕셔너리를 렌더한다
+├── assets/
+│   ├── app.css                 토큰 기반. 라이트·다크 두 벌
+│   ├── app.js                  입력·모드 판정·렌더·로컬 보관
+│   └── rules.js                판정 산술 7종. 순수 함수, 외부 의존 없음
+└── data/
+    ├── index.json              자치구 목록과 빌드 메타 (1.7KB)
+    ├── anchors.json            서울 전체 상수 + 모수 문자열 (1.3KB)
+    └── cohort/<자치구>.json × 25   코호트 + 건물 색인. 최대 270KB (gzip 39KB)
+
+functions/
+└── api/
+    ├── _llm.js                 비밀값·공통 규약·검증층 (밑줄로 시작하면 라우트가 아니다)
+    ├── parse.js                POST /api/parse
+    └── draft.js                POST /api/draft
 ```
+
+`functions/` 는 `dist/` 밖에 둔다. Pages 가 프로젝트 루트의 `functions/` 를 라우트로 올린다.
+
+**실측 규모**: 원본 596,178행 → 전세→전세 갱신 85,691건 → 코호트 11,715개 + 건물 색인 5,908개. 자산 합계 3.2MB, **사용자 1인당 전송량은 자치구 샤드 1개 ≈ gzip 40KB**다. §8의 추정(1인당 150KB)보다 작다.
+
+**캐시**: 파일명에 해시를 붙이지 않고 `manifest`/`index.json` 기준으로 관리한다. 자산이 하루 1회만 바뀌므로 해시 URL의 이득이 없고, 해시를 쓰면 색인도 매번 새로 받아야 한다.
 
 ### How — 환경변수
 
@@ -200,11 +212,17 @@ dist/
 
 ### 배포 절차
 
-1. 로컬에서 파이프라인 실행 → `dist/data/` 갱신. 채움률·매칭률 리포트와 `manifest.json`의 기준일 변화를 확인한다(기준일이 그대로면 데이터가 갱신되지 않은 것이다).
-2. 커밋·푸시 → Pages가 빌드·배포. 함수는 같은 배포에 포함된다.
-3. 배포 후 확인 2개: 상단 배너의 기준일, `/api/compose`가 키 없이도 템플릿 문장을 반환하는지.
+```bash
+set -a; . ./.env; set +a
+./scripts/test_all.sh                        # 키 없이 도는 검증 전부 (약 3초)
+python3 scripts/build_assets.py              # 수집 → 집계 → 자산 게이트 → dist/data (약 3분)
+npx wrangler pages dev dist                  # 로컬 확인. 함수 포함
+npx wrangler pages deploy dist               # 배포
+```
 
----
+1. `manifest`/`anchors.json` 의 기준일이 바뀌었는지 확인한다. 그대로면 데이터가 갱신되지 않은 것이다.
+2. 수집 로그의 `실패 N` 이 0인지 본다. 0이 아니면 `--retry` 로 그 조합만 다시 받는다. **429는 조용히 빠진다** — 실측에서 오피스텔 80개 조합(7개 자치구)이 통째로 누락된 채 자산이 만들어졌다.
+3. 배포 후 확인 2개: 상단 배너의 기준일, `/api/draft` 가 키 없이도 `ok:true` 로 응답하는지.
 
 ## 7. 보안
 

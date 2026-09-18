@@ -28,3 +28,8 @@ Thumbs.db
 
 # 다른 스킬이 만든 임시 산출물
 test-mock-page/
+.playwright-mcp/
+.wrangler/
+
+# 수집 원본 캐시 (재현은 스크립트로)
+/data/
