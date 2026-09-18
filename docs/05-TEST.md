@@ -35,7 +35,8 @@
 ├─ node scripts/test_rules.mjs                  ① 판정 산술·문장 읽기 28건
 ├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 6건
 ├─ node scripts/test_contrast.mjs               ④ 색 대비 36쌍
-└─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조
+├─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조
+└─ node scripts/test_source.mjs                  ⑥ 소스 금지 패턴 17건
 ```
 
 실패는 `AssertionError` 와 exit 1 로 나온다. `set -e` 가 종료 코드를 받아 첫 실패에서 멈춘다. 새 프레임워크를 들이지 않았다 — 표준 라이브러리 `assert` 와 작은 스크립트뿐이고 `package.json` 이 없다.
@@ -97,6 +98,22 @@
 **What / How.** `app.css` 의 색 토큰을 직접 읽어 대비를 계산한다. 본문 4.5:1, 큰 글자·경계 3:1. 라이트·다크 각 18쌍. `body` 에 명시적 배경이 있는지, 두 테마에 같은 토큰이 다 있는지도 본다.
 
 **브라우저를 띄우는 검사는 없다.** 렌더 결과는 §7의 사람 확인으로 남긴다 — 자동화하지 않았다는 사실을 숨기지 않는다.
+
+### 2-6. ⑥ 소스 금지 패턴 — `node scripts/test_source.mjs`
+
+**Why.** 정적 분석이 0건이었다(06-NIST-REVIEW §4-D). 린터를 들이려면 npm 의존성이 생기는데 **`package.json` 이 없는 것이 이 저장소의 설계**다. 그래서 넓은 분석 대신 **좁은 금지 목록**을 둔다.
+
+**What / How.** 문자열 검사로 **정확히 잡히는 것만** 잡는다. 데이터 흐름을 따라가지 않는다.
+
+| 검사 | 지키는 것 |
+|---|---|
+| `eval`·`new Function`·`document.write` 0건 | 실행 경로에 문자열을 넣지 않는다 |
+| `innerHTML` 자리 **수를 고정**(24) | 안전을 자동으로 증명할 수는 없다. 자리가 늘면 사람이 그 자리를 본다 — 여기서 할 수 있는 정직한 최대치다 |
+| 키 형태 문자열 0건 | `sk-…`, 40자 이상 16진, 원천 키 하드코딩 |
+| 배포물에 `http://` 0건 | 혼합 콘텐츠. SVG 네임스페이스는 가져오는 주소가 아니라 식별자라 제외 |
+| `target="_blank"` 에 `rel="noopener"` | 창 참조 유출 |
+| **함수의 로그 호출 형태 고정** | `{ev, code, ms}` 말고는 못 나간다. "로그에 남기지 않는다"는 약속이 주석이 아니라 규칙이 된다 |
+| `rules.js` 에 `fetch` 0건 | 판정 경로에 네트워크가 들어오면 결정론이 깨진다 |
 
 ### 2-5. ⑤ LLM 검증층 — `node scripts/test_verify.mjs`
 

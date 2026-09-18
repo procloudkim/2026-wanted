@@ -3,7 +3,7 @@
  * 이 함수는 판정하지 않는다. 응답 스키마에 백분위·인상률·판정이 들어갈 자리가 없다.
  * 출력은 조회 키와 사용자 입력값으로만 쓰이고, 판정은 브라우저가 집계 자산으로 한다.
  */
-import { json, fail, readBody, gate, preflight, callOpenAI, rangeCheck } from "./_llm.js";
+import { json, fail, readBody, gate, preflight, callOpenAI, rangeCheck, emit } from "./_llm.js";
 
 const SYSTEM = `너는 한국 전월세 계약 문장에서 값을 뽑아내는 추출기다. 판정하지 않는다.
 
@@ -48,15 +48,18 @@ const EMPTY = Object.fromEntries(SCHEMA.schema.required.map((k) =>
   [k, k === "confidence" ? 0 : k === "missing" ? [] : null]));
 
 export async function onRequestPost({ request, env }) {
+  const t0 = Date.now();
+  const done = (code, res) => { emit("parse", code, t0); return res; };
+
   const { origin, blocked } = gate(request, 10);
-  if (blocked) return blocked;
+  if (blocked) return done("E_GATE", blocked);
 
   const { body, err } = await readBody(request);
-  if (err) return fail(err, "입력이 너무 길거나 형식이 맞지 않습니다.", false, {}, origin);
+  if (err) return done(err, fail(err, "입력이 너무 길거나 형식이 맞지 않습니다.", false, {}, origin));
 
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text || text.length > 2000)
-    return fail("E_INPUT_INVALID", "문장은 1자에서 2,000자 사이로 넣어 주세요.", false, { parsed: EMPTY }, origin);
+    return done("E_INPUT_INVALID", fail("E_INPUT_INVALID", "문장은 1자에서 2,000자 사이로 넣어 주세요.", false, { parsed: EMPTY }, origin));
 
   const hint = typeof body?.hint?.sgg_nm === "string" ? body.hint.sgg_nm.slice(0, 20) : null;
 
@@ -72,19 +75,19 @@ export async function onRequestPost({ request, env }) {
     parsed = { ...EMPTY, ...JSON.parse(content) };
   } catch {
     // 제공자 장애·타임아웃. 핵심 기능은 그대로 동작하므로 수동 입력 폼으로 보낸다.
-    return fail("E_UPSTREAM", "문장을 자동으로 읽지 못했습니다. 직접 넣어 주세요.", true, { parsed: EMPTY }, origin);
+    return done("E_UPSTREAM", fail("E_UPSTREAM", "문장을 자동으로 읽지 못했습니다. 직접 넣어 주세요.", true, { parsed: EMPTY }, origin));
   }
 
   // 방어선 2 — 자릿수 사고 탐지. confidence 는 통과 근거로 쓰지 않는다.
   const range = rangeCheck(parsed);
   if (range)
-    return fail(range, "읽어 낸 금액이 범위를 벗어납니다. 값을 직접 확인해 주세요.", false, { parsed }, origin);
+    return done(range, fail(range, "읽어 낸 금액이 범위를 벗어납니다. 값을 직접 확인해 주세요.", false, { parsed }, origin));
 
   // 방어선 3 — 신뢰도 게이트. 탈락시킬 때만 쓴다.
   if (!(parsed.confidence >= 0.7) || parsed.new_deposit_manwon == null)
-    return fail("E_PARSE_LOW_CONFIDENCE", "일부 조건을 읽지 못했습니다. 아래에 직접 넣어 주세요.", false, { parsed }, origin);
+    return done("E_PARSE_LOW_CONFIDENCE", fail("E_PARSE_LOW_CONFIDENCE", "일부 조건을 읽지 못했습니다. 아래에 직접 넣어 주세요.", false, { parsed }, origin));
 
-  return json({ ok: true, parsed, warnings: parsed.missing || [] }, origin);
+  return done("ok", json({ ok: true, parsed, warnings: parsed.missing || [] }, origin));
 }
 
 export const onRequestOptions = ({ request }) => preflight(request);

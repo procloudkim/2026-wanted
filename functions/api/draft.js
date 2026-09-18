@@ -6,7 +6,7 @@
  * 그래서 숫자가 들어간 문장은 전부 브라우저의 코드가 쓰고, 이 함수는 그 앞뒤만 쓴다.
  * 검증은 그래서 단순해진다 — 모델이 쓴 문장에 숫자가 하나라도 있으면 버린다.
  */
-import { json, fail, readBody, gate, preflight, callOpenAI, hasForbidden, hasDigits } from "./_llm.js";
+import { json, fail, readBody, gate, preflight, callOpenAI, hasForbidden, hasDigits, emit } from "./_llm.js";
 
 const SYSTEM = `너는 한국 세입자가 집주인에게 보낼 회신의 **인사말과 맺음말**을 쓴다.
 본문(숫자와 근거)은 이미 만들어져 있고 너는 보지 않는다.
@@ -34,11 +34,14 @@ const CHOICES = { 행사: "계약갱신요구권을 행사하려 한다", 합의
                   무행동: "조건을 확인하는 중이다" };
 
 export async function onRequestPost({ request, env }) {
+  const t0 = Date.now();
+  const done = (code, res) => { emit("draft", code, t0); return res; };
+
   const { origin, blocked } = gate(request, 5);
-  if (blocked) return blocked;
+  if (blocked) return done("E_GATE", blocked);
 
   const { body, err } = await readBody(request);
-  if (err) return fail(err, "입력이 너무 길거나 형식이 맞지 않습니다.", false, {}, origin);
+  if (err) return done(err, fail(err, "입력이 너무 길거나 형식이 맞지 않습니다.", false, {}, origin));
 
   const tone = body?.tone === "soft" ? "soft" : "neutral";
   const stance = CHOICES[body?.choice] || CHOICES["무행동"];
@@ -54,14 +57,15 @@ export async function onRequestPost({ request, env }) {
     const f = JSON.parse(content);
     const text = `${f.opening}\n${f.closing}`;
 
-    if (hasDigits(text)) return json({ ok: true, frame: null, verified: false, source: "template", reason: "numbers" }, origin);
-    if (hasForbidden(text)) return json({ ok: true, frame: null, verified: false, source: "template", reason: "forbidden" }, origin);
-    if (!f.opening.trim() || !f.closing.trim() || text.length > 600)
-      return json({ ok: true, frame: null, verified: false, source: "template", reason: "shape" }, origin);
+    const reject = (reason) =>
+      done(reason, json({ ok: true, frame: null, verified: false, source: "template", reason }, origin));
+    if (hasDigits(text)) return reject("numbers");
+    if (hasForbidden(text)) return reject("forbidden");
+    if (!f.opening.trim() || !f.closing.trim() || text.length > 600) return reject("shape");
 
-    return json({ ok: true, frame: f, verified: true, source: "llm" }, origin);
+    return done("ok", json({ ok: true, frame: f, verified: true, source: "llm" }, origin));
   } catch {
-    return json({ ok: true, frame: null, verified: false, source: "template", reason: "upstream" }, origin);
+    return done("upstream", json({ ok: true, frame: null, verified: false, source: "template", reason: "upstream" }, origin));
   }
 }
 

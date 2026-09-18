@@ -91,6 +91,21 @@ export function gate(request, perMinute) {
   return { origin };
 }
 
+/* ── 운영 신호 ──────────────────────────────────────────────────────────────
+ * 로그를 켜는 것이 아니라 **내용 없는 집계**를 켠다. 남기는 것은 무슨 일이 있었는지의
+ * 코드와 소요시간뿐이고, 사용자 문장·금액·IP·오리진은 남기지 않는다.
+ *
+ * 왜 필요한가: 오리진 차단도, 속도 제한 발동도, 업스트림 실패도 실제로 일어나는데
+ * 흔적이 0이라 사후에 볼 것이 없었다(06-NIST-REVIEW §4-A). Pages 는 이 줄을
+ * `wrangler pages deployment tail` 로 흘려보내고 **보관하지 않는다** — 보존하지 않으면서
+ * 볼 수는 있는 상태가 이 제품의 약속과 맞는다.
+ *
+ * ponytail: 집계가 아니라 스트림이라 지표를 누적하지 못한다. 누적이 필요해지면
+ * Analytics Engine 바인딩을 붙인다. 그 전까지는 이 한 줄이 0과 1의 차이다. */
+export const emit = (ev, code, t0) => {
+  try { console.log(JSON.stringify({ ev, code, ms: Date.now() - t0 })); } catch { /* 신호 때문에 요청이 죽지 않는다 */ }
+};
+
 export async function readBody(request) {
   const raw = await request.text();
   if (raw.length > MAX_BODY) return { err: "E_INPUT_INVALID" };

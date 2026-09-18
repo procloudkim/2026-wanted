@@ -419,7 +419,10 @@ function renderMarket(v) {
     <li><span class="k">신규 표본</span><span class="v">${R.fmtN(m.n)}건</span></li>
     <li><span class="k">차액</span><span class="v ${m.gap > 0 ? "ok" : "over"}">${R.fmtMoney(Math.abs(m.gap))}</span></li>
     <li><span class="k">차액 비율</span><span class="v">${R.fmtPct(Math.abs(m.gap_pct), 1)}</span></li>`));
-  if (m.widened) box.append(el("p", "trail", `신규 표본이 모자라 범위를 넓혔습니다 — <b>이 숫자는 ${R.LEVELS[m.level]} 기준입니다.</b>`));
+  // 모수를 값 옆에 적는다(02-SPEC DR4). 이 카드만 코호트 라벨이 없어서 "같은 조건"이
+  // 어느 범위인지 화면에 없었다 — 단계가 내려갈수록 차액의 부호까지 바뀌는 숫자다.
+  box.append(el("p", "mine", `모수 — ${esc(cohortLabel({ ...v, cohort: { level: m.level } }))}의 <b>신규 전세 ${R.fmtN(m.n)}건</b>, ${R.LEVELS[m.level]} 기준.`
+    + (m.widened ? " <b>신규 표본이 모자라 범위를 넓혔습니다.</b>" : "")));
 }
 
 function renderConvert(v) {
