@@ -337,7 +337,9 @@ function renderVerdict(v) {
     ]) {
       const row = el("div", "bar-row");
       row.innerHTML = `<span class="lab"><span>${name} <b>${R.fmtN(d.n)}건</b></span><span><b>${R.fmtPct(d.over_cap_share_pct)}</b>가 5% 초과</span></span>
-        <span class="bar-track"><span class="bar-fill${warn ? " warn" : ""}" style="width:${Math.max(1, (d.over_cap_share_pct / max) * 100)}%"></span></span>`;
+        <span class="bar-track"><span class="bar-fill${warn ? " warn" : ""}"></span></span>`;
+      // 폭은 style 속성이 아니라 CSSOM 으로 준다 — CSP 에서 unsafe-inline 을 빼기 위해서다
+      row.querySelector(".bar-fill").style.width = `${Math.max(1, (d.over_cap_share_pct / max) * 100)}%`;
       bars.append(row);
     }
     g.append(bars);

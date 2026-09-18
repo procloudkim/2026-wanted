@@ -1,9 +1,26 @@
-# 자산은 하루 1회만 바뀐다. 색인·앵커는 짧게, 코호트 샤드는 길게 캐시한다.
+# Cloudflare Pages 정적 자산 헤더.
+#
+# 두 가지를 실측으로 배웠다.
+#  1) 경로는 요청 경로와 맞아야 한다. "/index.html" 로 적으면 "/" 요청에는 적용되지 않는다.
+#  2) 같은 패턴("/*")을 두 블록으로 나누면 뒤가 앞을 덮는다. 한 블록에 몰아 쓴다.
+#
+# 함수(/api/*)는 여기가 아니라 함수 스스로 헤더를 세운다(오리진 검사 포함).
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'
+  ! Access-Control-Allow-Origin
+
+/
+  Cache-Control: no-cache
 /index.html
   Cache-Control: no-cache
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
-  X-Frame-Options: DENY
 
 /assets/*
   Cache-Control: public, max-age=3600
@@ -14,7 +31,3 @@
   Cache-Control: public, max-age=600
 /data/cohort/*
   Cache-Control: public, max-age=3600
-
-# 생성 문장은 사용자마다 다르고 캐시할 이유가 없다
-/api/*
-  Cache-Control: no-store

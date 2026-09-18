@@ -1,6 +1,6 @@
 /* 검증층 검증. 네트워크·키 없이 돈다.  실행: node scripts/test_verify.mjs */
 import assert from "node:assert/strict";
-import { hasDigits, hasForbidden, rangeCheck } from "../functions/api/_llm.js";
+import { hasDigits, hasForbidden, rangeCheck, allowedOrigin, gate } from "../functions/api/_llm.js";
 
 let n = 0; const t = (name, fn) => { fn(); n++; };
 
@@ -12,6 +12,44 @@ const FACTS = {
   groups: { total_n: 85691, recorded: { n: 40814, over_cap_share_pct: 0.37 },
             unrecorded: { n: 44877, over_cap_share_pct: 31.95, excess_median: 2400 } },
 };
+
+t("오리진 경계 — 우리 페이지 말고는 이 함수를 부를 수 없다", () => {
+  const req = (origin) => ({ headers: new Map(Object.entries(origin ? { origin } : {})) });
+  // Map 은 get 만 쓰므로 Headers 대용으로 충분하다
+  const ok = (o) => allowedOrigin({ headers: { get: (k) => (k === "origin" ? o : null) } });
+
+  assert.equal(ok("https://gaengsin-baseline.pages.dev"), "https://gaengsin-baseline.pages.dev");
+  assert.equal(ok("https://4a5e40c6.gaengsin-baseline.pages.dev"), "https://4a5e40c6.gaengsin-baseline.pages.dev");
+  assert.equal(ok("http://localhost:8788"), "http://localhost:8788");
+  assert.equal(ok("http://127.0.0.1:8788"), "http://127.0.0.1:8788");
+
+  // 이 넷을 막지 못하면 남의 사이트가 우리 OpenAI 키를 쓴다
+  assert.equal(ok("https://evil.example"), null);
+  assert.equal(ok(null), null);                                        // curl 처럼 오리진 없는 요청
+  assert.equal(ok("https://gaengsin-baseline.pages.dev.evil.com"), null);  // 접두어 흉내
+  assert.equal(ok("http://gaengsin-baseline.pages.dev"), null);        // https 가 아니다
+  assert.equal(ok("not a url"), null);
+  void req;
+});
+
+t("gate 는 오리진을 먼저 보고, 통과해야 속도 제한을 센다", () => {
+  const mk = (o, ip) => ({ headers: { get: (k) => (k === "origin" ? o : k === "cf-connecting-ip" ? ip : null) } });
+  const bad = gate(mk("https://evil.example", "1.1.1.1"), 5);
+  assert.ok(bad.blocked);
+  assert.equal(bad.origin, undefined);
+
+  const good = gate(mk("https://gaengsin-baseline.pages.dev", "2.2.2.2"), 5);
+  assert.equal(good.origin, "https://gaengsin-baseline.pages.dev");
+  assert.equal(good.blocked, undefined);
+
+  // 같은 IP 로 한도를 넘기면 막힌다
+  let hit = null;
+  for (let i = 0; i < 10 && !hit; i++) {
+    const r = gate(mk("https://gaengsin-baseline.pages.dev", "3.3.3.3"), 5);
+    if (r.blocked) hit = i;
+  }
+  assert.equal(hit, 5, "6번째 요청에서 막혀야 한다");
+});
 
 t("모델이 쓴 문장에 숫자가 있으면 버린다", () => {
   // 숫자 문장은 전부 코드가 쓴다. 모델은 인사말·맺음말만 쓰고 거기에 숫자가 있으면 폐기한다.
