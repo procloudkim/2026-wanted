@@ -34,3 +34,6 @@ test-mock-page/
 
 # 수집 원본 캐시 (재현은 스크립트로)
 /data/
+
+# 외부 스킬 산출물 — 제품과 무관하다
+design-system/

@@ -67,8 +67,11 @@ export const LEVELS = {
   1: "단지·면적대", 2: "단지 전체 면적", 3: "법정동·면적대",
   4: "법정동 전체", 5: "자치구 전체",
 };
-/** 단지 단위 표본이 성립하는 유형(02-SPEC §5.3-1). 나머지는 3단계부터 시작한다. */
-const HAS_BUILDING_COHORT = new Set(["아파트", "오피스텔"]);
+/* 단지 단위 표본이 성립하는 유형(02-SPEC §5.3-1). 나머지는 3단계부터 시작한다.
+ * 아파트만인 이유는 원천이다 — 실측 596,178행에서 단지 일련번호(aptSeq)는 아파트만 100% 오고
+ * 오피스텔·연립다세대·단독다가구는 100% 비어 있다. 단지명이 와도 일련번호가 없으면
+ * 같은 이름을 같은 건물로 묶을 근거가 없다(dist/data/anchors.json 의 fill.by_kind.seq_missing_pct). */
+const HAS_BUILDING_COHORT = new Set(["아파트"]);
 
 export function keysFor({ kind, sgg, umd, seq, area }) {
   const b = band(area), ks = [];
@@ -102,8 +105,8 @@ export function widen(cohorts, key, minN, count) {
 
 /* ── R1. 인상률 ────────────────────────────────────────────────────────────
  * 5% 동치·초과는 정수 비교로만 판정한다. 실수로 rate > 0.05 를 쓰면
- * 정확히 +5.00% 인 계약 일부가 초과로 잘못 분류되는데, 전세→전세 갱신의
- * 43% 가 정확히 +5.00% 라 그 오분류의 영향이 크다. */
+ * * 정확히 +5.00% 인 계약 일부가 초과로 잘못 분류되는데, 전세→전세 갱신의
+ * 26.51% 가 정확히 +5.00% 라 그 오분류의 영향이 크다(anchors.exactly5_pct). */
 export function r1Rate(prev, now, prevRent = 0, nowRent = 0) {
   if (prevRent > 0 || nowRent > 0) return { error: "E_RENT_TYPE_MIXED" };
   if (!(prev > 0)) return { error: "E-RATE-DIV0" };
@@ -240,5 +243,5 @@ export function r7Convert(prevDeposit, offerDeposit, offerRent) {
            compare_to_distribution: true, cut };
 }
 
-/** 서울 전세→월세 갱신 역산 분포 (n=600). 세 분포 중 표본이 가장 얇다. */
-export const CONVERT_DIST = { n: 600, p25: 5.17, p50: 6.27, p75: 9.44 };
+/* 전세→월세 갱신 역산 분포는 상수로 두지 않는다. 다른 두 분포와 같은 빌드에서 나와야
+ * 기준일·모수가 어긋나지 않는다 — dist/data/anchors.json 의 convert 를 그대로 읽는다. */

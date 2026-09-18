@@ -83,7 +83,7 @@ function fillDong() {
 function fillBuildings() {
   const list = $("#bldg-list"), umd = $("#dong").value, kind = $("#kind").value;
   list.innerHTML = "";
-  const usesBuilding = kind === "아파트" || kind === "오피스텔";
+  const usesBuilding = kind === "아파트";   // 원천에 단지 일련번호가 오는 유형은 아파트뿐이다
   $("#bldg-field").hidden = !usesBuilding;
   if (!S.shard || !usesBuilding) return;
   // datalist 는 select 가 아니라서 .add() 가 없다. 법정동을 고르기 전에는 목록이 길어 상한을 둔다.
@@ -151,7 +151,7 @@ function readInput() {
     errs.push(["offer", "제시받은 보증금과 월세를 넣어 주세요. 둘 다 0일 수는 없습니다."]);
 
   let seq = null, candidates = [], bldgName = $("#bldg").value.trim();
-  if (gu !== "OUT" && (kind === "아파트" || kind === "오피스텔") && bldgName) {
+  if (gu !== "OUT" && kind === "아파트" && bldgName) {
     const f = findBuilding(bldgName, umd, kind);
     seq = f.seq; candidates = f.candidates;
     if (f.nm) bldgName = f.nm;   // 라벨에는 입력한 철자가 아니라 원천의 이름을 쓴다
@@ -427,11 +427,19 @@ function renderConvert(v) {
   } else if (c.kind === "BOTH_UP") {
     box.append(el("p", "headline", `보증금과 월세가 <b>둘 다 올랐습니다.</b> 전환이 아니므로 전환율을 내지 않습니다. 보증금은 보증금끼리, 월세는 월세끼리 비교하세요.`));
   } else {
-    const d = R.CONVERT_DIST, pos = c.annual_rate_pct > d.p75 ? "p75(9.44%)보다 높습니다"
-      : c.annual_rate_pct > d.p50 ? "중앙값(6.27%)보다 높고 p75(9.44%)보다 낮습니다"
-      : c.annual_rate_pct > d.p25 ? "p25(5.17%)와 중앙값(6.27%) 사이입니다" : "p25(5.17%)보다 낮습니다";
-    box.append(el("p", "headline", `이 조건의 <b>환산 전환율은 연 <span class="big">${R.fmtPct(c.annual_rate_pct)}</span></b>입니다 (연 월세 ${R.fmtMoney(i.orent * 12)} ÷ 보증금 감액 ${R.fmtMoney(c.cut)}). 서울 전세→월세 갱신 역산 분포(n=${d.n})에서 ${pos}.`));
-    box.append(el("p", "mine", "이 값은 시장 데이터에서 역산한 참고값이며 <strong>법정 전월세전환율 한도 판정이 아닙니다.</strong> 세 분포 중 <strong>표본이 가장 얇고</strong>, 단지 단위가 아니라 서울 전체 분포를 씁니다."));
+    // 분포는 판정 산술과 같은 빌드에서 온다. 스냅샷을 못 읽었으면 전환율만 내고 견주지 않는다.
+    const d = S.anchors?.convert;
+    const P = (x) => R.fmtPct(x);
+    const pos = !d ? null
+      : c.annual_rate_pct > d.p75 ? `p75(${P(d.p75)})보다 높습니다`
+      : c.annual_rate_pct > d.p50 ? `중앙값(${P(d.p50)})보다 높고 p75(${P(d.p75)})보다 낮습니다`
+      : c.annual_rate_pct > d.p25 ? `p25(${P(d.p25)})와 중앙값(${P(d.p50)}) 사이입니다`
+      : `p25(${P(d.p25)})보다 낮습니다`;
+    box.append(el("p", "headline", `이 조건의 <b>환산 전환율은 연 <span class="big">${P(c.annual_rate_pct)}</span></b>입니다 (연 월세 ${R.fmtMoney(i.orent * 12)} ÷ 보증금 감액 ${R.fmtMoney(c.cut)}).`
+      + (pos ? ` 서울 전세→월세 갱신 역산 분포(n=${R.fmtN(d.n)})에서 ${pos}.` : "")));
+    box.append(el("p", "mine", d
+      ? "이 값은 시장 데이터에서 역산한 참고값이며 <strong>법정 전월세전환율 한도 판정이 아닙니다.</strong> 세 분포 중 <strong>표본이 가장 얇고</strong>, 단지 단위가 아니라 서울 전체 분포를 씁니다."
+      : "스냅샷을 읽지 못해 <strong>분포와 견주지 않았습니다.</strong> 이 전환율은 입력값만으로 계산한 것이며 법정 전월세전환율 한도 판정이 아닙니다."));
   }
 }
 

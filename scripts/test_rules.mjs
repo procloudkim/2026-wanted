@@ -2,6 +2,10 @@
  * 기대값은 docs/02-SPEC.md §3 의 검증 표를 그대로 옮긴 것이다. 표가 바뀌면 여기가 먼저 깨져야 한다. */
 import assert from "node:assert/strict";
 import * as R from "../dist/assets/rules.js";
+import { readFileSync } from "node:fs";
+
+/* 화면이 읽는 것과 같은 스냅샷. 상수를 따로 두면 기준일·모수가 어긋난다. */
+const A = JSON.parse(readFileSync(new URL("../dist/data/anchors.json", import.meta.url), "utf8"));
 
 const D = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -35,7 +39,7 @@ t("R1 — 연우의 +8%", () => {
 
 t("R1 — 정확히 5%는 초과가 아니다 (정수 비교)", () => {
   // 실수로 rate > 0.05 를 쓰면 이 계약이 초과로 잘못 분류된다. 갱신의 43%가 여기에 몰려 있다.
-  for (const prev of [10000, 33333, 61368, 7]) {
+  for (const prev of [10000, 33333, 85691, 7]) {
     const now = prev + prev / 20;
     if (!Number.isInteger(now)) continue;
     const r = R.r1Rate(prev, now);
@@ -194,7 +198,10 @@ t("R7 — 세린의 두 조건", () => {
   assert.equal(b.kind, "CONVERT");
   assert.equal(b.annual_rate_pct, 7.2);
   assert.equal(b.compare_to_distribution, true);
-  assert.ok(b.annual_rate_pct > R.CONVERT_DIST.p50 && b.annual_rate_pct < R.CONVERT_DIST.p75);
+  // 분포는 스냅샷에서 온다. 계열이 바뀌면 이 자리도 바뀌고, 문서의 같은 예시 문장도 함께 바뀌어야 한다.
+  assert.ok(A.convert.p25 <= A.convert.p50 && A.convert.p50 <= A.convert.p75, "분위수가 단조가 아니다");
+  assert.ok(b.annual_rate_pct > A.convert.p25 && b.annual_rate_pct < A.convert.p50,
+    `연 7.2% 는 p25(${A.convert.p25}%)와 중앙값(${A.convert.p50}%) 사이여야 한다`);
 });
 
 t("R7 — 보증금과 월세가 둘 다 오르면 전환율을 내지 않는다", () => {
@@ -252,9 +259,9 @@ t("금액 표기", () => {
   assert.equal(R.fmtMoney(90000), "9억원");
   assert.equal(R.fmtMoney(-6500), "-6,500만원");
   assert.equal(R.fmtMoney(null), "—");
-  assert.equal(R.fmtPct(34.47), "34.47%");
+  assert.equal(R.fmtPct(31.95), "31.95%");
   assert.equal(R.fmtPct(2.0, 1), "2.0%");
-  assert.equal(R.fmtN(61368), "61,368");
+  assert.equal(R.fmtN(85691), "85,691");
   assert.equal(R.fmtN(undefined), "—");   // fmtMoney·fmtPct 와 같은 방어를 쓴다
   assert.equal(R.fmtN(NaN), "—");
 });

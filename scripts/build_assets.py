@@ -29,11 +29,15 @@ CAP = 5.0  # 주택임대차보호법 제7조 상한 5%
 RATE_MIN, RATE_MAX = -90.0, 300.0  # 이 밖은 자릿수 사고로 보고 버린다(종전 보증금 4만원 신고 실측)
 MIN_N = 5  # 백분위가 20% 단위 이상 의미를 갖는 최소 표본 (04-API §6.4)
 
-SVC = {  # 유형: (서비스명, 단지명 태그, 면적 태그, 코호트 최상위 단계)
+# 유형: (서비스명, 단지명 태그, 면적 태그, 코호트 최상위 단계)
+# 최상위 단계 1(단지)은 aptSeq 가 오는 유형에만 성립한다. 실측(596,178행)에서 aptSeq 는
+# 아파트만 100% 오고 오피스텔·연립다세대·단독다가구는 100% 비어 있다. 단지명이 와도
+# 일련번호가 없으면 같은 이름을 같은 건물로 묶을 근거가 없어 3단계(법정동·면적대)부터 쓴다.
+SVC = {
     "아파트": ("RTMSDataSvcAptRent", "aptNm", "excluUseAr", 1),
-    "오피스텔": ("RTMSDataSvcOffiRent", "offiNm", "excluUseAr", 1),
-    "연립다세대": ("RTMSDataSvcRHRent", "mhouseNm", "excluUseAr", 2),
-    "단독다가구": ("RTMSDataSvcSHRent", None, "totalFloorAr", 2),
+    "오피스텔": ("RTMSDataSvcOffiRent", "offiNm", "excluUseAr", 3),
+    "연립다세대": ("RTMSDataSvcRHRent", "mhouseNm", "excluUseAr", 3),
+    "단독다가구": ("RTMSDataSvcSHRent", None, "totalFloorAr", 3),
 }
 
 SEOUL = {
@@ -188,7 +192,7 @@ def keys_for(r):
     """폴백 사다리 각 단계의 코호트 키. 위에서부터 좁은 순서(02-SPEC §3.6).
 
     유형을 키에 넣는 이유: 아파트와 단독다가구를 같은 법정동 코호트에 섞으면 분포가 뒤섞인다.
-    연립다세대·단독다가구는 단지 단위 표본이 성립하지 않아 1·2단계를 만들지 않는다(02-SPEC §5.3-1).
+    아파트 말고는 원천에 단지 일련번호가 없어 1·2단계를 만들지 않는다(02-SPEC §5.3-1).
     """
     b = band(r["area"])
     ks = []
@@ -314,10 +318,73 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
         "recorded": summary(rr),       # 갱신요구권 행사 기록 있음
         "unrecorded": summary(nr),     # 행사 기록 없음
         "excess_median": excess_median(renew),
+        "ladder": ladder(renew),
+        "convert": convert_dist(rows),
+        "fill": fill_rates(rows),
         "exactly5_pct": round(sum(1 for r in renew if is_at_cap(r)) / len(renew) * 100, 2) if renew else None,
         "by_kind": by_kind,
         "build": {"rows": len(rows), "dropped_outliers": dropped,
                   "failed_jobs": len(errs), "zero_jobs": len(zeros)},
+    }
+
+
+def ladder(renew):
+    """갱신 계약이 폴백 사다리의 몇 단계에서 표본 3건을 만나는가(02-SPEC §3.6).
+
+    "표본 3건 이상인 코호트 비율"은 모수를 코호트로 잡느냐 계약으로 잡느냐에 따라 값이 달라진다.
+    화면이 답하는 질문은 "내 계약이 어느 단계에서 판정되나"이므로 계약을 모수로 센다."""
+    buckets = {}
+    for r in renew:
+        for _lv, k in keys_for(r):
+            buckets[k] = buckets.get(k, 0) + 1
+    hit = {}
+    for r in renew:
+        for lv, k in keys_for(r):
+            if buckets[k] >= 3:
+                hit[lv] = hit.get(lv, 0) + 1
+                break
+        else:
+            hit["none"] = hit.get("none", 0) + 1
+    n = len(renew) or 1
+    return {str(lv): round(hit.get(lv, 0) / n * 100, 2) for lv in (1, 2, 3, 4, 5, "none")}
+
+
+def convert_dist(rows):
+    """전세→월세 갱신에서 역산한 전환율(연 %) 분포. 보증금 감액이 있는 갱신만 센다.
+
+    R7 이 사용자의 조건을 이 분포에 견준다. 세 분포 중 표본이 가장 얇고, 단지 단위가 아니라
+    서울 전체다. 법정 전월세전환율 한도 판정이 아니라 시장에서 역산한 참고값이다."""
+    v = []
+    for r in rows:
+        if r["ctype"] != "갱신" or r["prev_rent"] or not r["prev_deposit"] or not r["rent"]:
+            continue
+        cut = r["prev_deposit"] - r["deposit"]
+        if cut > 0:
+            v.append(r["rent"] * 12 / cut * 100)
+    if not v:
+        return None
+    return {"n": len(v), "p25": pctile(v, 25), "p50": pctile(v, 50), "p75": pctile(v, 75)}
+
+
+def fill_rates(rows):
+    """갱신 행의 채움률. "행사 기록 없음"이라는 표기는 이 칸이 계속 채워져야 성립한다.
+    한 유형에서 양성 토큰이 무너지면 그 유형의 분포 해석이 통째로 바뀐다(05-TEST Q2·Q3)."""
+    ren = [r for r in rows if r["ctype"] == "갱신"]
+    n = len(ren) or 1
+    by_kind = {}
+    for kind in SVC:
+        g = [r for r in ren if r["kind"] == kind]
+        a = [r for r in rows if r["kind"] == kind]
+        by_kind[kind] = {
+            "n": len(g),
+            "rr_token_pct": round(sum(1 for r in g if r["rr"]) / (len(g) or 1) * 100, 2),
+            "seq_missing_pct": round(sum(1 for r in a if not r["seq"]) / (len(a) or 1) * 100, 2),
+        }
+    return {
+        "renewal_rows": len(ren),
+        "prev_deposit_missing_pct": round(sum(1 for r in ren if not r["prev_deposit"]) / n * 100, 2),
+        "rr_token_pct": round(sum(1 for r in ren if r["rr"]) / n * 100, 2),
+        "by_kind": by_kind,
     }
 
 
@@ -329,8 +396,9 @@ def excess_median(renew):
     return round(pctile(ex, 50)) if ex else None
 
 
-def validate(records, anc):
-    """배포 전 게이트(04-API §6.8). 조용한 실패를 여기서 잡는다."""
+def validate(records, anc, prev=None):
+    """배포 전 게이트(04-API §6.8). 조용한 실패를 여기서 잡는다.
+    prev 는 직전 스냅샷의 유형별 양성 토큰 비율. 생략하면 배포본에서 읽는다."""
     bad = []
     for k, r in records.items():
         v = (r["rr"] or []) + (r["nr"] or [])
@@ -346,7 +414,31 @@ def validate(records, anc):
         bad.append("레코드 0건")
     if anc["total_n"] < 1000:
         bad.append(f"전세→전세 갱신 표본 급감 {anc['total_n']}")
+
+    # 갱신 행의 채움률. 이 둘이 무너지면 "행사 기록 없음"이라는 표기 자체가 성립하지 않는다.
+    f = anc.get("fill")
+    if f:
+        if f["prev_deposit_missing_pct"] > 0.5:
+            bad.append(f"갱신 행 종전 보증금 결측 {f['prev_deposit_missing_pct']}% > 0.5%")
+        prev = previous_anchors() if prev is None else prev
+        for kind, d in f["by_kind"].items():
+            if d["rr_token_pct"] < 15:   # 실측 최저는 단독다가구 22.41%. 그 아래는 붕괴로 본다
+                bad.append(f"{kind} 갱신요구권 양성 토큰 {d['rr_token_pct']}% < 15%")
+            p = prev.get(kind)
+            if p is not None and d["rr_token_pct"] < p - 5:
+                bad.append(f"{kind} 양성 토큰 직전 스냅샷 {p}% → {d['rr_token_pct']}% ({p - d['rr_token_pct']:.2f}%p 하락)")
     return bad
+
+
+def previous_anchors():
+    """직전 배포본의 유형별 양성 토큰 비율. 없으면 빈 dict — 첫 빌드에서는 비교하지 않는다."""
+    path = os.path.join(os.path.dirname(__file__), "..", "dist", "data", "anchors.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            by_kind = json.load(f)["fill"]["by_kind"]
+        return {k: v["rr_token_pct"] for k, v in by_kind.items()}
+    except (OSError, KeyError, ValueError):
+        return {}
 
 
 # ── 자체 검증 (네트워크 0) ──────────────────────────────────────────────────
@@ -427,6 +519,27 @@ def selftest():
     # 초과 2건(3,000 / 1,000)의 최근접 순위 중앙값은 사사오입으로 위쪽인 3,000이다
     assert anc["excess_median"] == 3000
 
+    # 사다리: 픽스처의 갱신 3건은 전부 1단계에서 표본 3건을 만난다
+    assert anc["ladder"]["1"] == 100.0 and anc["ladder"]["none"] == 0.0
+    # 환산: 보증금 감액이 없는 월세 갱신(5,000 → 5,000)은 전환이 아니라 순증이라 표본이 아니다
+    assert anc["convert"] is None
+    conv = convert_dist([{"ctype": "갱신", "prev_rent": None, "prev_deposit": 50000,
+                          "deposit": 20000, "rent": 100, "kind": "아파트"}])
+    assert conv == {"n": 1, "p25": 4.0, "p50": 4.0, "p75": 4.0}   # 100×12 ÷ 30,000 = 연 4%
+    # 채움률: 갱신 5건(월세 갱신·자릿수 이상 포함) 중 양성 토큰 1건, 종전 보증금 결측 0건
+    assert anc["fill"]["renewal_rows"] == 5 and anc["fill"]["rr_token_pct"] == 20.0
+    assert anc["fill"]["prev_deposit_missing_pct"] == 0.0
+    assert anc["fill"]["by_kind"]["아파트"]["seq_missing_pct"] == 0.0
+    # 채움률 게이트가 실제로 막는가 — 결측 0.9% 와 양성 토큰 10% 둘 다 걸려야 한다
+    low = {"total_n": 5000, "fill": {"prev_deposit_missing_pct": 0.9,
+                                     "by_kind": {"아파트": {"rr_token_pct": 10.0}}}}
+    assert len(validate(recs, low, prev={})) == 2, validate(recs, low, prev={})
+    # 직전 스냅샷 대비 급락도 막는다 — 절대 하한을 넘겨도 걸려야 한다
+    ok_abs = {"total_n": 5000, "fill": {"prev_deposit_missing_pct": 0.0,
+                                        "by_kind": {"아파트": {"rr_token_pct": 30.0}}}}
+    assert validate(recs, ok_abs, prev={"아파트": 44.13}) == [
+        "아파트 양성 토큰 직전 스냅샷 44.13% → 30.0% (14.13%p 하락)"]
+    assert validate(recs, ok_abs, prev={"아파트": 33.0}) == []
     assert validate(recs, {"total_n": 5000}) == []
     assert validate({}, {"total_n": 5000}) == ["레코드 0건"]
 
