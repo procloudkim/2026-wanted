@@ -20,7 +20,7 @@ const intOf = R.intOf;   // 만원 단위 정수만 받는다. 검증은 scripts
 const STORE = "gaengsin-input-v1";
 const CHOICE = "gaengsin-choice";
 const S = { index: null, anchors: null, shard: null, v: null, choice: null,
-            snapshotFailed: false, amountConfirmed: false };
+            snapshotFailed: false, amountConfirmed: false, pending: null };
 
 /* ── 부팅 ──────────────────────────────────────────────────────────────── */
 async function boot() {
@@ -245,7 +245,7 @@ const MODE_TEXT = {
 };
 
 const OVERLAY_TEXT = {
-  "M-05": "단독·다가구는 원천에 <strong>건물명·지번이 없어</strong> 같은 건물끼리 비교할 수 없습니다. <strong>같은 읍면동, 비슷한 연면적</strong> 기준으로 보여 드립니다.",
+  "M-05": "단독·다가구는 원천에 <strong>건물명·지번이 없어</strong> 같은 건물끼리 비교할 수 없습니다. <strong>같은 법정동, 비슷한 연면적</strong> 기준으로 보여 드립니다.",
   "O-01": "갱신요구권은 같은 주택에서 <strong>1회 한정</strong>입니다. 이미 행사하셨다면 이번 갱신은 합의 갱신이고 <strong>5% 상한이 적용되지 않습니다.</strong> 이 데이터에는 임차인의 갱신권 소진 이력이 <strong>없어서</strong> 입력하신 값을 그대로 신뢰합니다 — 입력이 틀리면 판정도 틀립니다.",
   "O-02": "실거주는 갱신거절 사유입니다(주택임대차보호법 제6조의3 제1항 단서 8호). <strong>이 서비스는 실거주 주장의 진위를 판정하지 않습니다.</strong> 지금 할 일은 통보 내용을 <strong>일시·수단·발화자와 함께 기록</strong>하는 것입니다.",
   "O-03": "이 판정의 데이터 기준일이 오래됐습니다. <strong>최근 30일 계약은 표본에서 빠질 수 있습니다.</strong>",
@@ -703,6 +703,21 @@ function wire() {
 
   $("#parse-btn").addEventListener("click", parseText);
 
+  // 읽은 값은 여기를 지나야 판정 입력이 된다 (02-SPEC §6.1)
+  $("#parse-out").addEventListener("click", (e) => {
+    const out = $("#parse-out");
+    if (e.target.id === "parse-ok" && S.pending) {
+      applyParsed(S.pending);
+      S.pending = null;
+      document.querySelector('.tabs button[data-tab="amount"]').click();
+      out.innerHTML = "넣었습니다. <strong>'금액으로' 탭에서 값을 확인하고 고치실 수 있습니다.</strong>";
+    } else if (e.target.id === "parse-no") {
+      S.pending = null;
+      out.innerHTML = `읽은 값을 넣지 않았습니다. ${MANUAL}`;
+      document.querySelector('.tabs button[data-tab="amount"]').click();
+    }
+  });
+
   $("#form").addEventListener("submit", (e) => {
     e.preventDefault();
     const i = readInput();
@@ -779,10 +794,16 @@ function applyParsed(p) {
   save();
 }
 
+/* 읽은 값은 **사용자가 확인하기 전까지 판정 입력 칸에 넣지 않는다.**
+ * 고지는 차단이 아니다 — "맞는지 확인하세요"라고 적어 두면 사용자는 그대로 판정 버튼을 누른다.
+ * 자릿수가 3배 밖이면 M-11 이 잡지만, 3억5천을 3억8천으로 잘못 읽는 종류는 배율이 정상이라
+ * 어떤 자동 검사에도 걸리지 않는다. 그런데 그 숫자가 협상 자리로 간다. */
 const readLine = (p, where) =>
   `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
   + (p.new_monthly_manwon ? `, 제시 월세 <b>${R.fmtMoney(p.new_monthly_manwon)}</b>` : "")
-  + `. <strong>맞는지 확인하고 '금액으로' 탭에서 고치실 수 있습니다.</strong> ${where}`;
+  + `. ${where}`
+  + `<span class="rowbtns"><button type="button" class="btn primary" id="parse-ok">맞습니다, 이 값으로</button>`
+  + `<button type="button" class="btn ghost" id="parse-no">직접 넣겠습니다</button></span>`;
 
 const MANUAL = `<strong>'금액으로' 탭에 직접 넣어 주세요.</strong>`;
 
@@ -794,10 +815,9 @@ async function parseText() {
   // 애매하면 읽지 않고 언어 모델로 넘긴다 — 틀린 값을 조용히 채우지 않는 것이 먼저다.
   const rule = R.readAmounts(text);
   if (rule.ok) {
-    const p = { cur_deposit_manwon: rule.cur, new_deposit_manwon: rule.next, new_monthly_manwon: rule.rent };
-    applyParsed(p);
+    S.pending = { cur_deposit_manwon: rule.cur, new_deposit_manwon: rule.next, new_monthly_manwon: rule.rent };
     out.hidden = false;
-    out.innerHTML = readLine(p, "이 문장은 <strong>브라우저 안에서 읽었습니다 — 서버로 보내지 않았습니다.</strong>");
+    out.innerHTML = readLine(S.pending, "이 문장은 <strong>브라우저 안에서 읽었습니다 — 서버로 보내지 않았습니다.</strong>");
     return;
   }
 
@@ -809,9 +829,9 @@ async function parseText() {
       signal: AbortSignal.timeout(10000),
     }).then((x) => x.json());
     const p = r.parsed || {};
-    // 거절된 응답(ok:false)은 값을 넣지 않는다. 서버가 범위·신뢰도로 버린 숫자가
+    // 거절된 응답(ok:false)은 후보로도 올리지 않는다. 서버가 범위·신뢰도로 버린 숫자가
     // 판정 입력 칸에 그대로 들어가면 검증층을 통과한 값과 구분되지 않는다.
-    if (r.ok) applyParsed(p);
+    if (r.ok) S.pending = p;
     out.hidden = false;
     out.innerHTML = r.ok
       ? readLine(p, "원문은 저장하지 않았습니다.")

@@ -42,8 +42,8 @@ forbid(/document\.write\s*\(/, "document.write 는 쓰지 않는다");
  * 문자열 검사로 못 본다. 대신 **자리 수를 고정**해서 새 자리가 조용히 늘지 않게 한다.
  * 늘거나 줄면 사람이 그 자리를 보고 이 숫자를 고친다. 그것이 여기서 할 수 있는 정직한 최대치다. */
 const SINKS = [...read("dist/assets/app.js").matchAll(/\.innerHTML\s*=\s*([^\n]*)/g)].map((m) => m[1].trim());
-assert.equal(SINKS.length, 24,
-  `dist/assets/app.js 의 innerHTML 자리가 24개에서 ${SINKS.length}개로 바뀌었다 — 새 자리가 esc() 를 지나는지 확인하고 이 숫자를 고친다`);
+assert.equal(SINKS.length, 26,
+  `dist/assets/app.js 의 innerHTML 자리가 26개에서 ${SINKS.length}개로 바뀌었다 — 새 자리가 esc() 를 지나는지 확인하고 이 숫자를 고친다`);
 for (const rhs of SINKS) {
   // 맨 변수를 그대로 넣는 자리는 el() 헬퍼 하나뿐이고, 거기 들어가는 문자열은 호출부에서 만든다.
   const bare = /^[a-zA-Z_$][\w$]*\s*;/.test(rhs);
@@ -82,6 +82,31 @@ for (const f of SRC.filter((s) => s.startsWith("functions/"))) {
 }
 forbid(/console\.\w+\([^)]*\b(text|body|parsed|content|opening|closing|origin|ip)\b/,
   "사용자 내용·식별자가 로그로 나간다", SRC.filter((f) => f.startsWith("functions/")));
+
+/* ── 배포물이 불러오는 자산은 전부 우리 것이다 ──────────────────────────────
+ * 제3자 자산은 우리 모르게 바뀔 수 있고, Google Fonts 는 같은 URL 도 User-Agent 마다
+ * 응답 해시가 달라 SRI 로 고정할 수도 없다(2026-09-19 실측). 그래서 런타임에 두지 않는다.
+ * 사용자가 눌러서 나가는 <a href> 는 대상이 아니다 — 그것은 불러오는 자산이 아니다. */
+for (const f of SRC.filter((x) => x.startsWith("dist/") && x.endsWith(".html"))) {
+  for (const m of read(f).matchAll(/<(?:link|script|img)\b[^>]*\b(?:href|src)="(https?:\/\/[^"]+)"/g)) {
+    // 우리 오리진을 가리키는 canonical 은 불러오는 자산이 아니라 선언이다
+    if (m[1].startsWith("https://gaengsin-baseline.pages.dev")) continue;
+    assert.fail(`${f}: 외부 오리진에서 자산을 불러온다 — ${m[1].slice(0, 70)}`);
+  }
+  for (const m of read(f).matchAll(/<link\b[^>]*rel="preconnect"[^>]*>/g))
+    assert.fail(`${f}: 외부 오리진 preconnect 가 남아 있다 — ${m[0].slice(0, 70)}`);
+  n++;
+}
+for (const f of SRC.filter((x) => x.endsWith(".css"))) {
+  for (const m of read(f).matchAll(/url\(\s*["']?(https?:\/\/[^)"']+)/g))
+    assert.fail(`${f}: CSS 가 외부 오리진 자산을 참조한다 — ${m[1].slice(0, 70)}`);
+  n++;
+}
+/* CSP 도 같은 말을 해야 한다 */
+const headers = read("dist/_headers");
+assert.match(headers, /style-src 'self';/, "_headers CSP 의 style-src 에 외부 오리진이 남아 있다");
+assert.match(headers, /font-src 'self';/, "_headers CSP 의 font-src 에 외부 오리진이 남아 있다");
+n += 2;
 
 /* ── 판정 경로에 네트워크가 없다 ──────────────────────────────────────────── */
 forbid(/\bfetch\s*\(/, "rules.js 는 순수 함수만 둔다 — 판정 경로에 네트워크가 들어오면 결정론이 깨진다",

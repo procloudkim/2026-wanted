@@ -1,3 +1,50 @@
+/* 본문 글꼴 — 자가 호스팅.
+ *
+ * Why: 외부에서 받으면 그 파일이 언제든 바뀔 수 있는데 SRI 로 고정할 수가 없다.
+ * 실측(2026-09-19): 같은 Google Fonts URL 을 User-Agent 만 바꿔 받으면 응답 해시가 달라진다.
+ * 무결성을 걸 수 없는 제3자 자산을 런타임 경로에 두지 않는다 — 파일 4개 53KB 를 직접 싣는다.
+ *
+ * 한글은 시스템 글꼴로 간다. Noto Sans KR 을 같이 받으면 woff2 128개·CSS 285KB 라
+ * 자가 호스팅 비용이 본문 자산 전체보다 커진다. 한글 UI 글꼴은 어느 운영체제에나 있다.
+ * Atkinson 을 남기는 이유는 취향이 아니라 저시력 가독성 때문이다(숫자를 읽는 화면이다). */
+
+/* latin-ext */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/atkinson-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/atkinson-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/atkinson-700-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/atkinson-700-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* 갱신 기준선 — Swiss/미니멀. 숫자가 주인공이라 장식을 넣지 않는다.
    토큰은 design-system/default/MASTER.md 에서 왔다. */
 
@@ -16,7 +63,8 @@
 
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --r: 8px;
-  --sans: "Atkinson Hyperlegible", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  /* 한글은 시스템 글꼴로 간다 — fonts.css 머리말 참조 */
+  --sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Malgun Gothic", sans-serif;
   --shadow: 0 1px 2px rgb(2 6 23 / .06), 0 1px 3px rgb(2 6 23 / .04);
 }
 
