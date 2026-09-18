@@ -104,7 +104,7 @@ const LEGACY = [
   ["n=600", "옛 환산 분포 표본"], ["600건", "옛 환산 분포 표본"],
 ];
 
-const SCAN = ["README.md", "docs/01-PRD.md", "docs/02-SPEC.md", "docs/03-ARCHITECTURE.md",
+const SCAN = ["README.md", "docs/00-INDEX.md", "docs/00-GLOSSARY.md", "docs/STYLE.md", "docs/01-PRD.md", "docs/02-SPEC.md", "docs/03-ARCHITECTURE.md",
   "docs/05-TEST.md", "dist/index.html", "dist/assets/app.js", "dist/assets/rules.js",
   "functions/api/parse.js", "functions/api/draft.js", "functions/api/_llm.js",
   "scripts/build_assets.py", "scripts/test_rules.mjs", "scripts/test_verify.mjs"];

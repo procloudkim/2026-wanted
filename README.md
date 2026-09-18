@@ -38,15 +38,20 @@
 
 > **배포** — https://gaengsin-baseline.pages.dev
 
+**[docs/00-INDEX.md](docs/00-INDEX.md) 부터 읽으면 된다** — 5분·15분·60분 경로와 "무엇을 하러 왔나"별 순서가 있다.
+
 | 문서 | 내용 |
 |---|---|
+| [docs/00-INDEX.md](docs/00-INDEX.md) | 읽는 경로, 문서별 한 줄 요약 |
+| [docs/00-GLOSSARY.md](docs/00-GLOSSARY.md) | 용어와 **쓰지 않기로 한 말** |
 | [docs/01-PRD.md](docs/01-PRD.md) | 문제 정의, 사용자와 맥락, 기능 범위와 비범위, 성공 지표 |
 | [docs/02-SPEC.md](docs/02-SPEC.md) | 입력 명세, 산술 판정 규칙, 화면 문장, 상태 분기, AI 두 단계와 검증층 |
 | [docs/03-ARCHITECTURE.md](docs/03-ARCHITECTURE.md) | 데이터 파이프라인, 배포 구성, 보안, 용량, 장애 폴백 |
 | [docs/04-API.md](docs/04-API.md) | 공공 API 연동, 집계 자산 스키마, 함수 인터페이스, 오류 코드 |
-| [docs/05-TEST.md](docs/05-TEST.md) | 골든셋, 데이터 품질 게이트, 회귀 감시, 분기 테스트 |
+| [docs/05-TEST.md](docs/05-TEST.md) | 검사 6종, 데이터 게이트 8종, 골든셋, 아직 없는 것 |
+| [docs/STYLE.md](docs/STYLE.md) | 이 문서들을 쓰는 규칙과 배포 전 확인 |
 
-모든 문서는 **Why → What → How** 순서로 쓴다.
+모든 문서는 **Why → What → How** 순서로 쓴다. 숫자의 단일 출처는 `dist/data/anchors.json` 이고, 문서가 그것과 어긋나면 검사가 깨진다.
 
 ## 데이터 출처
 
@@ -102,6 +107,7 @@ npx wrangler pages deploy dist              # 배포
 | `test_rules.mjs` | 판정 산술 7종. 기대값은 `docs/02-SPEC.md` §3의 검증 표를 그대로 옮긴 것이다 |
 | `test_verify.mjs` | LLM 출력 검증층 — 숫자 차단, 금칙어, 자릿수 사고 범위 검사 |
 | `test_contrast.mjs` | 색 대비 36쌍(라이트·다크). 다크모드는 스크린샷으로 확인되지 않아 수치로 잡는다 |
+| `test_anchors_docs.mjs` | 스냅샷 ↔ 문서·OG 메타 대조. 자산을 다시 만들면 **문서를 같이 고치기 전에는 통과하지 않는다** |
 
 ## 보안
 
