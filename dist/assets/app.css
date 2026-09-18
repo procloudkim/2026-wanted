@@ -98,6 +98,27 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .anchors span { font-size: .8rem; color: var(--muted-fg); }
 .anchor-note { font-size: .8rem; color: var(--muted-fg); }
 
+.hero-cta { margin-top: var(--s5); }
+
+/* AI 경계 설명 */
+.aigrid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); margin: var(--s4) 0; }
+.aigrid > div { border: 1px solid var(--border); border-radius: var(--r); padding: var(--s4); }
+.aigrid h3 { font-size: .95rem; margin-bottom: var(--s2); }
+.aigrid p { font-size: .9rem; color: var(--secondary); margin-bottom: var(--s2); }
+.aigrid p:last-child { margin-bottom: 0; }
+.ai-no { border-left: 4px solid var(--accent); }
+.ai-yes { border-left: 4px solid var(--muted-fg); }
+.whylist { font-size: .9rem; color: var(--secondary); padding-left: 1.2em; margin: var(--s3) 0 0; }
+.whylist li { margin-bottom: var(--s3); }
+
+/* 통보 기록 */
+.notices { list-style: none; padding: 0; margin: var(--s4) 0 0; display: grid; gap: var(--s2); }
+.notices li { display: grid; grid-template-columns: 11rem 1fr auto; gap: var(--s3); align-items: start;
+  border: 1px solid var(--border); border-radius: var(--r); padding: var(--s3) var(--s4); font-size: .92rem; }
+.notices .d { font-weight: 700; }
+.notices small { display: block; color: var(--muted-fg); margin-top: var(--s1); }
+.notices .btn { min-height: 36px; padding: var(--s1) var(--s3); font-size: .85rem; }
+
 /* ── 카드 ───────────────────────────────────────────────────────────────── */
 .card {
   background: var(--card); color: var(--card-fg);
@@ -226,7 +247,7 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--da
 .src { font-size: .8rem; color: var(--muted-fg); }
 
 @media (max-width: 34rem) {
-  .tl li, .gates li { grid-template-columns: 1fr; gap: var(--s1); }
+  .tl li, .gates li, .notices li { grid-template-columns: 1fr; gap: var(--s1); }
   .card { padding: var(--s4); }
   .facts li { padding: var(--s3); }
   .facts .v { font-size: 1.05rem; }   /* "9억 7,200만원"이 한 줄에 들어가는 크기 */

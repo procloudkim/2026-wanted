@@ -1,6 +1,6 @@
 /* 갱신 기준선 — 화면. 판정 산술은 rules.js 가 하고 여기서는 읽고 그린다.
  * 판정 경로에 네트워크가 없다. 정적 자산을 받은 뒤로는 전부 브라우저 안에서 끝난다. */
-import * as R from "./rules.js";
+import * as R from "./rules.js?v=2";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -18,7 +18,8 @@ const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2
 const intOf = (v) => { const n = Number(String(v ?? "").replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : NaN; };
 
 const STORE = "gaengsin-input-v1";
-const S = { index: null, anchors: null, shard: null, v: null, choice: null, snapshotFailed: false };
+const S = { index: null, anchors: null, shard: null, v: null, choice: null,
+            snapshotFailed: false, amountConfirmed: false };
 
 /* ── 부팅 ──────────────────────────────────────────────────────────────── */
 async function boot() {
@@ -193,6 +194,16 @@ function decide(i) {
   v.groups = R.r4Groups(S.anchors, v.rate.is_over_cap);
 
   const mw = R.widen(S.shard.cohorts, key, R.MIN_N_MARKET, (r) => r.nn || 0);
+
+  // 자릿수 사고 탐지. 비율 검사로는 못 잡으므로 코호트의 신규 전세 중앙값을 바깥 기준으로 쓴다.
+  // 되묻기이지 버리기가 아니다 — 사용자가 "맞다"고 하면 그대로 판정한다.
+  const off = mw.rec ? R.depositLooksOff(i.dep, mw.rec.nd) : null;
+  if (off && !S.amountConfirmed) {
+    v.mode = "M-11";
+    v.amountCheck = { ...off, level: mw.level, n: mw.rec.nn };
+    return finish(v);
+  }
+
   v.market = mw.rec ? R.r5Market(mw.rec.nd, mw.rec.nn, i.odep) : null;
   if (v.market) { v.market.level = mw.level; v.market.widened = mw.widened; }
   return finish(v);
@@ -228,28 +239,38 @@ const OVERLAY_TEXT = {
 /* ── 렌더 ──────────────────────────────────────────────────────────────── */
 function render(v) {
   S.v = v;
-  const i = v.input, blocked = ["M-01", "M-02", "M-03", "M-04", "M-08", "M-09"].includes(v.mode);
+  const i = v.input, blocked = ["M-01", "M-02", "M-03", "M-04", "M-08", "M-09", "M-11"].includes(v.mode);
   $("#result").hidden = false;
 
   const mc = $("#mode-card");
   const overlays = v.flags.filter((f) => OVERLAY_TEXT[f]).map((f) => `<p>${OVERLAY_TEXT[f]}</p>`).join("");
-  if (MODE_TEXT[v.mode] || overlays) {
+  const amount = v.amountCheck ? amountQuestion(v) : "";
+  if (MODE_TEXT[v.mode] || overlays || amount) {
     const [t, b] = MODE_TEXT[v.mode] || ["", ""];
     mc.hidden = false;
     mc.classList.toggle("stop", blocked);
-    $("#mode-title").textContent = t || "함께 보셔야 할 것";
-    $("#mode-text").innerHTML = (b ? `<p>${b}</p>` : "") + overlays;
+    $("#mode-title").textContent = v.amountCheck ? "보증금 금액을 한 번만 확인해 주세요" : (t || "함께 보셔야 할 것");
+    $("#mode-text").innerHTML = amount + (b ? `<p>${b}</p>` : "") + overlays;
   } else mc.hidden = true;
 
-  renderTimeline(v);
-  $("#s3").hidden = !v.cohort && !v.rate?.rate_pct && v.mode !== "M-08" && v.mode !== "M-09";
+  renderTimeline(v);   // 만기일만 쓰므로 금액 확인과 무관하게 항상 낸다
+
+  // 금액을 되묻는 중이면 그 금액에서 나온 숫자를 보여 주지 않는다.
+  // 확인 전에 틀릴 수 있는 값을 화면에 띄우면 되묻는 의미가 없다.
+  const holdMoney = v.mode === "M-11";
+
+  $("#s3").hidden = holdMoney || (!v.cohort && !v.rate?.rate_pct && v.mode !== "M-08" && v.mode !== "M-09");
   if (!$("#s3").hidden) renderVerdict(v);
-  $("#s4").hidden = !v.market;
-  if (v.market) renderMarket(v);
-  $("#s7").hidden = !v.convert;
-  if (v.convert) renderConvert(v);
+  $("#s4").hidden = holdMoney || !v.market;
+  if (!$("#s4").hidden) renderMarket(v);
+  $("#s7").hidden = holdMoney || !v.convert;
+  if (!$("#s7").hidden) renderConvert(v);
   renderChoices(v);
+  $("#s5").hidden = holdMoney;   // 문안에도 그 금액이 들어간다
   renderGates(v);
+  // O-02(실거주 통보)면 연다. 그 밖에도 기록이 있으면 계속 보여 준다.
+  $("#s-notice").hidden = !(v.flags.includes("O-02") || loadNotices().length);
+  renderNotices();
 
   $("#limit-5").hidden = !v.groups;
   $("#limit-6").hidden = !v.convert && i.rent === 0 && i.orent === 0;
@@ -347,6 +368,21 @@ function renderVerdict(v) {
   }
 }
 
+/** M-11 — 자릿수 사고로 보일 때 되묻는 문장. 판정을 멈추고 사용자에게 확인받는다. */
+function amountQuestion(v) {
+  const a = v.amountCheck, i = v.input;
+  return `<p>입력하신 현재 보증금은 <b>${R.fmtMoney(i.dep)}</b>입니다.
+    그런데 같은 조건(${esc(R.LEVELS[a.level])})의 <b>신규 전세 보증금 중앙값은 ${R.fmtMoney(a.median)}</b>(표본 ${R.fmtN(a.n)}건)이라,
+    입력값이 <b>${a.ratio}배</b>${a.kind === "HIGH" ? " 높습니다" : "로 낮습니다"}.</p>
+    <p><strong>0을 하나 더 치거나 덜 친 것이 아닌지만 확인해 주세요.</strong>
+    금액이 10배 틀려도 종전과 제시가 같은 배율이면 인상률은 정상으로 보여서, 비율만으로는 잡히지 않습니다.
+    실제로 분포 밖인 계약도 있으므로 <strong>맞다고 하시면 그대로 판정합니다.</strong></p>
+    <div class="rowbtns">
+      <button type="button" class="btn primary" id="amount-ok">네, ${esc(R.fmtMoney(i.dep))} 맞습니다</button>
+      <button type="button" class="btn ghost" id="amount-fix">보증금 다시 입력</button>
+    </div>`;
+}
+
 const cohortLabel = (v) => {
   const i = v.input, lv = v.cohort.level;
   const where = `${S.shard?.gu ?? ""} ${i.umd}`.trim();
@@ -386,7 +422,7 @@ function renderConvert(v) {
 }
 
 function renderChoices(v) {
-  $("#s5").hidden = false;
+  $("#s5").hidden = false;   // render() 가 금액 확인 중이면 다시 숨긴다
   $("#chosen").hidden = true;
   $("#draft-out").hidden = true;
   $("#copy-btn").hidden = true;
@@ -481,6 +517,95 @@ async function makeDraft() {
   $("#copy-btn").dataset.text = text;
 }
 
+/* ── 공유 — 사용자의 금액은 내보내지 않는다. 서비스와 서울 전체 집계만 나간다 ── */
+async function share() {
+  const a = S.anchors;
+  const text = a
+    ? `전월세 갱신, 같은 법인데 결과가 갈립니다. 갱신요구권 행사 기록이 있는 갱신 ${R.fmtN(a.recorded.n)}건 중 5% 초과는 ${R.fmtPct(a.recorded.over5)}, 기록이 없는 ${R.fmtN(a.unrecorded.n)}건은 ${R.fmtPct(a.unrecorded.over5)}입니다. (${a.scope}, 기준일 ${a.asof})`
+    : "전월세 갱신 조건이 실제 갱신 계약들 사이에서 어디쯤인지 확인하세요.";
+  const url = location.origin + "/";
+  try {
+    if (navigator.share) { await navigator.share({ title: "갱신 기준선", text, url }); return "shared"; }
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    return "copied";
+  } catch { return "failed"; }   // 사용자가 취소한 경우도 여기로 온다
+}
+
+function wireShare(id) {
+  const b = $(`#${id}`);
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    const r = await share();
+    if (r === "failed") return;
+    const label = b.lastChild;
+    const before = label.textContent;
+    label.textContent = r === "copied" ? " 링크를 복사했습니다" : " 공유했습니다";
+    setTimeout(() => { label.textContent = before; }, 2500);
+  });
+}
+
+/* ── 데모 — 빈 폼 앞에서는 이 서비스가 무엇을 하는지 보이지 않는다 ─────── */
+const DEMO = { kind: "아파트", gu: "11680", dong: "대치동", bldg: "", area: "84.9",
+               expiry: null, dep: "90000", rent: "0", odep: "97200", orent: "0" };
+
+async function runDemo() {
+  const btn = $("#demo-btn");
+  btn.disabled = true;
+  const exp = new Date();
+  exp.setMonth(exp.getMonth() + 3);           // 마감이 아직 열려 있는 만기일
+  for (const [k, val] of Object.entries({ ...DEMO, expiry: isoDate(exp) })) {
+    const e = $(`#${k}`);
+    if (!e || val == null) continue;
+    if (k === "gu") { e.value = val; await loadShard(val); }
+    else if (k === "dong") { e.value = val; fillBuildings(); }
+    else e.value = val;
+  }
+  S.amountConfirmed = false;
+  save();
+  $("#form").requestSubmit();
+  btn.disabled = false;
+}
+
+/* ── 통보 기록 (O-02) — 브라우저에만 남는다 ─────────────────────────────── */
+const NOTICES = "gaengsin-notices-v1";
+const loadNotices = () => { try { return JSON.parse(localStorage.getItem(NOTICES) || "[]"); } catch { return []; } };
+const saveNotices = (xs) => { try { localStorage.setItem(NOTICES, JSON.stringify(xs)); } catch { /* 저장 못해도 화면은 남는다 */ } };
+
+function renderNotices() {
+  const xs = loadNotices().sort((a, b) => (a.when || "").localeCompare(b.when || ""));
+  $("#nt-export").hidden = !xs.length;
+  $("#nt-list").innerHTML = xs.map((x, idx) => `<li>
+      <span class="d">${esc(x.when ? x.when.replace("T", " ") : "일시 미기재")}</span>
+      <span><b>${esc(x.how)}</b> · ${esc(x.who || "발화자 미기재")}<small>${esc(x.what || "")}</small></span>
+      <button type="button" class="btn ghost nt-del" data-i="${idx}" aria-label="이 기록 삭제">삭제</button>
+    </li>`).join("");
+}
+
+function addNotice() {
+  const x = { when: $("#nt-when").value, how: $("#nt-how").value,
+              who: $("#nt-who").value.trim(), what: $("#nt-what").value.trim() };
+  if (!x.when && !x.what) { $("#nt-what").focus(); return; }
+  saveNotices([...loadNotices(), x]);
+  $("#nt-what").value = "";
+  renderNotices();
+}
+
+function exportNotices() {
+  const xs = loadNotices().sort((a, b) => (a.when || "").localeCompare(b.when || ""));
+  const body = xs.map((x, i) =>
+    `${i + 1}. ${x.when ? x.when.replace("T", " ") : "(일시 미기재)"} / ${x.how} / ${x.who || "(발화자 미기재)"}\n   ${x.what || ""}`
+  ).join("\n\n");
+  const text = `임대인 통보 기록\n작성 ${new Date().toLocaleString("ko-KR")}\n`
+    + `${"-".repeat(40)}\n\n${body}\n\n${"-".repeat(40)}\n`
+    + `이 기록은 사용자가 직접 작성한 것이며 법률 문서가 아닙니다.\n`
+    + `이 서비스는 통보의 도달 여부나 효력을 판정하지 않습니다.\n`;
+  const a = el("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  a.download = "임대인-통보기록.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 /* ── 캘린더 내보내기 — 계정도 연락처도 쓰지 않는 유일한 알림 수단 ───────── */
 function downloadICS(v) {
   const d = v.window.deadline;
@@ -523,6 +648,7 @@ function wire() {
   $("#dong").addEventListener("change", () => { fillBuildings(); save(); });
   $("#kind").addEventListener("change", () => { fillDong(); save(); });
   $("#form").addEventListener("input", save);
+  $("#dep").addEventListener("input", () => { S.amountConfirmed = false; });
 
   $$(".tabs button").forEach((b) => b.addEventListener("click", () => {
     $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
@@ -556,11 +682,42 @@ function wire() {
   });
 
   $("#clear-btn").addEventListener("click", () => {
+    // 통보 기록(NOTICES)은 지우지 않는다. 계약 입력과 성격이 다르고 되살릴 수 없다.
     try { localStorage.removeItem(STORE); } catch {}
     $("#form").reset();
     $("#result").hidden = true;
     $("#deadline-bar").hidden = true;
     FIELDS.forEach((f) => showErr(f, ""));
+  });
+
+  $("#mode-text").addEventListener("click", (e) => {
+    if (e.target.id === "amount-ok") {
+      S.amountConfirmed = true;          // 사용자가 확인했으므로 그대로 판정한다
+      $("#form").requestSubmit();
+    } else if (e.target.id === "amount-fix") {
+      $("#result").hidden = true;
+      $("#dep").focus();
+      $("#dep").select();
+    }
+  });
+
+  $("#demo-btn").addEventListener("click", runDemo);
+  wireShare("share-btn");
+  wireShare("share-verdict");
+  $("#start-btn").addEventListener("click", () => {
+    $("#s1").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#kind").focus();
+  });
+
+  $("#nt-add").addEventListener("click", addNotice);
+  $("#nt-export").addEventListener("click", exportNotices);
+  $("#nt-list").addEventListener("click", (e) => {
+    const b = e.target.closest(".nt-del");
+    if (!b) return;
+    const xs = loadNotices();
+    xs.splice(Number(b.dataset.i), 1);
+    saveNotices(xs);
+    renderNotices();
   });
 
   $("#ics-btn").addEventListener("click", () => S.v && downloadICS(S.v));

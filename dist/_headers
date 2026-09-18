@@ -22,12 +22,13 @@
 /index.html
   Cache-Control: no-cache
 
+# 파일명에 콘텐츠 해시가 없다. 긴 캐시를 걸면 배포해도 옛 코드가 계속 돈다(실측: 1시간).
+# 조건부 요청으로 304 를 받는 편이, 심사 기간에 고친 것이 반영되지 않는 것보다 낫다.
 /assets/*
+  Cache-Control: no-cache
+/og.png
   Cache-Control: public, max-age=3600
 
-/data/index.json
+# 데이터 파일은 같은 주기로 묶는다. 앵커만 새로 받고 코호트가 낡으면 두 숫자의 기준일이 갈린다.
+/data/*
   Cache-Control: public, max-age=600
-/data/anchors.json
-  Cache-Control: public, max-age=600
-/data/cohort/*
-  Cache-Control: public, max-age=3600

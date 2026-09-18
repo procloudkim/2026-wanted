@@ -125,6 +125,30 @@ t("R5 — 표본 5건 미만이면 카드를 만들지 않는다", () => {
   assert.equal(m.gap_pct, 8.7);
 });
 
+/* ── R2-1 자릿수 사고 탐지 ────────────────────────────────────────────────── */
+t("R2-1 — 비율 검사로는 못 잡는 자릿수 오류를 바깥 기준이 잡는다", () => {
+  // "2억4천"을 24억으로 읽은 경우. 종전·제시가 같은 배율이라 인상률은 정상(+5%)이다.
+  assert.equal(R.r1Rate(240000, 252000).rate_pct, 5);        // 비율만 보면 완벽히 정상
+  assert.equal(R.r2Cap(240000, 252000).over, false);
+  // 같은 코호트의 신규 전세 중앙값이 2억 5천이면 10배 가까이 벗어난다
+  const off = R.depositLooksOff(240000, 25000);
+  assert.equal(off.kind, "HIGH");
+  assert.equal(off.ratio, 9.6);
+  assert.equal(off.median, 25000);
+});
+
+t("R2-1 — 되묻기이지 버리기가 아니다", () => {
+  // 3배 이내는 통과시킨다. 진짜로 분포 밖인 계약이 존재한다
+  assert.equal(R.depositLooksOff(70000, 25000), null);       // 2.8배
+  assert.equal(R.depositLooksOff(9000, 25000), null);        // 0.36배
+  assert.equal(R.depositLooksOff(75001, 25000).kind, "HIGH"); // 3.0배 초과
+  assert.equal(R.depositLooksOff(8333, 25000).kind, "LOW");   // 1/3 미만
+  // 기준이 없으면 판정하지 않는다 — 없는 근거로 되묻지 않는다
+  assert.equal(R.depositLooksOff(240000, null), null);
+  assert.equal(R.depositLooksOff(240000, 0), null);
+  assert.equal(R.depositLooksOff(0, 25000), null);
+});
+
 /* ── R6 법정 기한 (02-SPEC §3.7 검증 표 그대로) ────────────────────────────── */
 t("R6 — 개월 계산과 말일 보정", () => {
   const cases = [

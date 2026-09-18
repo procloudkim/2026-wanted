@@ -169,6 +169,23 @@ export function r5Market(newMedian, newN, myDeposit) {
   return { n: newN, new_median: newMedian, gap, gap_pct: round1((gap / newMedian) * 100) };
 }
 
+/* ── R2-1. 자릿수 사고 탐지 ────────────────────────────────────────────────
+ * Why: 금액이 10배 틀려도 종전과 제시가 같은 배율이면 인상률이 정상이라 어떤 비율 검사도
+ * 통과한다(실측: 어떤 모델은 "2억4천"을 24억으로 읽으면서 confidence 1.0 을 냈다).
+ * 잡으려면 **바깥 기준**이 필요하고, 그 기준이 코호트의 신규 전세 보증금 중앙값이다.
+ *
+ * 이것은 LLM 방어가 아니라 판정 경로의 가드다. 사용자가 0을 하나 더 치는 것도 같은 오류다.
+ * 이상치를 버리는 것이 아니라 되묻는 것이다 — 진짜로 분포 밖인 계약이 존재한다. */
+export const DEPOSIT_FACTOR = 3;   // 중앙값의 1/3 ~ 3배 밖이면 되묻는다
+
+export function depositLooksOff(deposit, cohortMedian) {
+  if (!(deposit > 0) || !(cohortMedian > 0)) return null;   // 기준이 없으면 판정하지 않는다
+  const ratio = deposit / cohortMedian;
+  if (ratio > DEPOSIT_FACTOR) return { kind: "HIGH", ratio: round1(ratio), median: cohortMedian };
+  if (ratio < 1 / DEPOSIT_FACTOR) return { kind: "LOW", ratio: round1(ratio), median: cohortMedian };
+  return null;
+}
+
 /* ── R6. 법정 기한 타임라인 ────────────────────────────────────────────────
  * 개월 단위 계산이 정답이고 D-180/D-60 표기는 보조다. 말일은 그 달의 마지막 날로 맞춘다. */
 export const daysInMonth = (y, m) => new Date(y, m, 0).getDate();   // m 은 1-12

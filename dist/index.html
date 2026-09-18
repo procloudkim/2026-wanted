@@ -6,11 +6,26 @@
 <title>갱신 기준선 — 전월세 갱신 조건이 실거래 분포 어디쯤인지</title>
 <meta name="description" content="집주인이 제시한 갱신 조건이 같은 단지·평형의 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인합니다. 판정은 코드가 하고, 숫자는 만들어 내지 않습니다.">
 <meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://gaengsin-baseline.pages.dev/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gaengsin-baseline.pages.dev/">
+<meta property="og:site_name" content="갱신 기준선">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="같은 법인데 결과가 86배 갈립니다 — 갱신 기준선">
+<meta property="og:description" content="갱신요구권 행사 기록이 있는 갱신 40,814건 중 5% 초과는 0.37%, 기록이 없는 44,877건은 31.95%. 제시받은 조건이 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인하세요.">
+<meta property="og:image" content="https://gaengsin-baseline.pages.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="갱신요구권 행사 기록이 있는 계약의 5% 초과 비율 0.37%와 기록이 없는 계약의 31.95%를 나란히 비교한 카드">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="같은 법인데 결과가 86배 갈립니다 — 갱신 기준선">
+<meta name="twitter:description" content="갱신요구권 행사 기록이 있는 갱신 40,814건 중 5% 초과는 0.37%, 기록이 없는 44,877건은 31.95%. 제시받은 조건이 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인하세요.">
+<meta name="twitter:image" content="https://gaengsin-baseline.pages.dev/og.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230F172A'/><path d='M7 22V10M13 22v-7M19 22v-11M25 22v-4' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/app.css?v=2">
 </head>
 <body>
 <a class="skip" href="#main">본문으로 건너뛰기</a>
@@ -41,6 +56,18 @@
       <div><dt>초과 차액 건당 중앙값</dt><dd><b id="a-excess">—</b><span>행사 기록 없는 초과 건</span></dd></div>
     </dl>
     <p class="anchor-note" id="anchor-scope">—</p>
+    <div class="rowbtns hero-cta">
+      <button type="button" class="btn primary" id="demo-btn">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
+        예시로 먼저 보기
+      </button>
+      <button type="button" class="btn ghost" id="start-btn">내 계약으로 확인하기</button>
+      <button type="button" class="btn ghost" id="share-btn">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v14"/></svg>
+        공유
+      </button>
+    </div>
+    <p class="anchor-note">예시는 강남구 대치동 전용 84.9㎡, 현재 보증금 9억원에 <b>+8%</b>를 제시받은 경우입니다. 실제 실거래 데이터로 즉시 판정합니다.</p>
   </section>
 
   <!-- ── S1 계약 입력 ─────────────────────────────────────────────────── -->
@@ -199,6 +226,13 @@
       <div id="verdict"></div>
       <div id="cohort"></div>
       <div id="groups"></div>
+      <div class="rowbtns">
+        <button type="button" class="btn ghost" id="share-verdict">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v14"/></svg>
+          이 비교 공유하기
+        </button>
+        <small class="help">공유되는 것은 <strong>서비스 링크와 서울 전체 집계</strong>입니다. 입력하신 금액은 포함되지 않습니다.</small>
+      </div>
       <p class="legal">
         <strong>5% 상한은 갱신요구권을 행사한 갱신에 적용되고, 합의로 맺은 갱신에는 적용되지 않습니다.</strong>
         화면의 &ldquo;초과 차액&rdquo;은 <strong>위법 금액이 아니라</strong>, 갱신요구권을 행사했을 때의 상한과 제시받은 조건의 차이입니다.
@@ -246,6 +280,50 @@
       </p>
     </section>
 
+    <!-- ── 통보 기록 양식 (O-02) ─────────────────────────────────────── -->
+    <section class="card" id="s-notice" hidden>
+      <h2><span class="step">기록</span> 임대인 통보 기록</h2>
+      <p class="note">
+        실거주 주장의 <strong>진위는 판정하지 않습니다.</strong> 지금 할 일은 통보 내용을
+        <strong>일시·수단·발화자와 함께 남기는 것</strong>입니다. 이 기록은 <strong>이 브라우저에만</strong> 저장되고
+        서버로 가지 않습니다. 내보내기는 직접 실행하셔야 합니다.
+      </p>
+      <div class="grid">
+        <p class="field">
+          <label for="nt-when">통보받은 일시</label>
+          <input id="nt-when" type="datetime-local">
+        </p>
+        <p class="field">
+          <label for="nt-how">수단</label>
+          <select id="nt-how">
+            <option>문자·메신저</option><option>전화</option><option>대면</option>
+            <option>내용증명</option><option>이메일</option><option>기타</option>
+          </select>
+        </p>
+        <p class="field">
+          <label for="nt-who">발화자</label>
+          <input id="nt-who" placeholder="예: 임대인 본인 / 중개인" maxlength="40">
+        </p>
+      </div>
+      <p class="field">
+        <label for="nt-what">통보 요지</label>
+        <textarea id="nt-what" rows="3" maxlength="500" placeholder="예: 실거주할 예정이라 갱신은 어렵다고 하심"></textarea>
+        <small class="help">들으신 말을 그대로 적으세요. 해석은 적지 않는 편이 낫습니다.</small>
+      </p>
+      <div class="rowbtns">
+        <button type="button" class="btn primary" id="nt-add">기록 추가</button>
+        <button type="button" class="btn ghost" id="nt-export" hidden>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          시간순으로 내보내기
+        </button>
+      </div>
+      <ol class="notices" id="nt-list"></ol>
+      <p class="legal">
+        이 기록은 법률 문서가 아니고, 이 서비스는 도달 여부와 효력을 판정하지 않습니다.
+        다툼이 필요하면 아래 상담 창구로 가세요.
+      </p>
+    </section>
+
     <!-- ── S6 3관문 ──────────────────────────────────────────────────── -->
     <section class="card" id="s6" hidden>
       <h2><span class="step">6</span> 계약 후 3관문</h2>
@@ -254,6 +332,43 @@
     </section>
   </div>
 </main>
+
+<section class="wrap" id="how-ai">
+  <div class="card">
+    <h2>이 서비스가 AI를 쓰는 곳과 쓰지 않는 곳</h2>
+    <p class="note">
+      화면의 숫자가 어디서 왔는지 아는 것이, 그 숫자를 협상 자리에 들고 갈지 정하는 데 필요하다고 봤습니다.
+    </p>
+    <div class="aigrid">
+      <div class="ai-no">
+        <h3>판정에는 쓰지 않습니다</h3>
+        <p>인상률, 5% 상한 금액과 차액, 코호트 백분위, 표본 수, 신규 시세 대비 차액, 환산 부담률, 법정 기한 —
+        <strong>일곱 가지 전부 사칙연산과 정렬입니다.</strong> 같은 입력이면 항상 같은 답이 나오고,
+        종이에 옮겨 검산할 수 있습니다. <strong>언어 모델이 끊겨도 이 숫자들은 그대로 나옵니다.</strong></p>
+      </div>
+      <div class="ai-yes">
+        <h3>두 곳에만 씁니다</h3>
+        <p><b>① 읽기</b> — 집주인에게 받은 문장에서 금액을 꺼냅니다. 판정하지 않고, 응답 형식에 판정이 들어갈 자리가 없습니다.</p>
+        <p><b>② 인사말 쓰기</b> — 회신 문안의 첫 문장과 끝 문장만 씁니다.
+        <strong>숫자가 든 문장은 전부 코드가 만들고, 모델이 쓴 부분에 숫자가 하나라도 있으면 버립니다.</strong></p>
+      </div>
+    </div>
+    <details class="more">
+      <summary>왜 이렇게까지 나눴는지 — 실제로 겪은 것 셋</summary>
+      <ol class="whylist">
+        <li><b>자릿수를 틀리면서 확신했습니다.</b> 어떤 모델은 &ldquo;구억육천만원&rdquo;을 9,600만원으로,
+        &ldquo;2억4천&rdquo;을 24억으로 읽으면서 확신도 1.0을 냈습니다. 그래서 확신도는 <strong>탈락시킬 때만</strong> 쓰고,
+        통과는 실거래 분포와 대조해서 정합니다.</li>
+        <li><b>숫자는 맞히고 이름표를 바꿨습니다.</b> 계산된 값을 주고 문장을 쓰게 했더니
+        코호트 전체 건수를 &ldquo;권리를 행사한 건수&rdquo;로, 5% 상한액을 &ldquo;제시된 보증금&rdquo;으로 썼습니다.
+        숫자만 검사해서는 잡히지 않아, 검사를 늘리는 대신 <strong>모델이 숫자를 쓰지 못하게 했습니다.</strong></li>
+        <li><b>모델을 탓하기 전에 지시문이 문제였습니다.</b> 후보 모델 넷이 같은 문장을 틀렸는데,
+        원인은 &ldquo;적힌 값만 뽑으라&rdquo;고 해 놓고 추론을 기대한 지시문이었습니다.
+        지시문을 고치니 넷 다 맞혔습니다. 모델은 기준을 정해 놓고 비교해서 골랐습니다.</li>
+      </ol>
+    </details>
+  </div>
+</section>
 
 <footer class="wrap foot">
   <h2 class="sr">데이터 한계와 법률 경계</h2>
@@ -279,6 +394,6 @@
   </p>
 </footer>
 
-<script type="module" src="assets/app.js"></script>
+<script type="module" src="assets/app.js?v=2"></script>
 </body>
 </html>
