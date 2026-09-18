@@ -43,7 +43,8 @@
 | **판정 규칙을 바꾸고 싶다** | `02-SPEC.md` §3 → `dist/assets/rules.js` → `scripts/test_rules.mjs` (기대값이 먼저 바뀌어야 한다) |
 | **AI 를 어디에 쓰는지 알고 싶다** | `02-SPEC.md` §6 → `functions/api/_llm.js` → 배포본 하단 "이 서비스가 AI를 쓰는 곳과 쓰지 않는 곳" |
 | **왜 이 기술을 골랐는지 알고 싶다** | `03-ARCHITECTURE.md` §10 대안 검토와 기각 이유 |
-| **한계를 알고 싶다** | `05-TEST.md` §8 아직 없는 것 → `01-PRD.md` §9 제약 → `README.md` §한계 |
+| **한계를 알고 싶다** | `05-TEST.md` §8 아직 없는 것 → `06-NIST-REVIEW.md` §4 남은 공백 → `01-PRD.md` §9 제약 → `README.md` §한계 |
+| **보안 경계를 보고 싶다** | `README.md` §보안 → `06-NIST-REVIEW.md` §3 검토가 찾아 고친 것 → `functions/api/_llm.js` |
 
 ---
 
@@ -59,6 +60,7 @@
 | `03-ARCHITECTURE.md` | 어떻게 구성하나 — 파이프라인, 런타임, 배포, 대안 기각 | 보통 |
 | `04-API.md` | 원천 API 측정 기록 — 인증, 응답 필드, 재현 기대값 | 가장 긺 |
 | `05-TEST.md` | 무엇을 검사하나 — 검사 6종, 게이트 8종, 아직 없는 것 | 보통 |
+| `06-NIST-REVIEW.md` | NIST 4종 대조 136개 통제와 남은 공백. 인증이 아니다 | 보통 |
 | `STYLE.md` | 이 문서들을 쓰는 규칙과 배포 전 확인 | 짧음 |
 
 정확한 분량은 `wc -l README.md docs/*.md` 로 본다. 표에 줄 수를 적으면 편집할 때마다 틀린다 — **스스로 낡는 숫자는 문서에 두지 않는다.**

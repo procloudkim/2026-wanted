@@ -49,6 +49,7 @@
 | [docs/03-ARCHITECTURE.md](docs/03-ARCHITECTURE.md) | 데이터 파이프라인, 배포 구성, 보안, 용량, 장애 폴백 |
 | [docs/04-API.md](docs/04-API.md) | 공공 API 연동, 집계 자산 스키마, 함수 인터페이스, 오류 코드 |
 | [docs/05-TEST.md](docs/05-TEST.md) | 검사 6종, 데이터 게이트 8종, 골든셋, 아직 없는 것 |
+| [docs/06-NIST-REVIEW.md](docs/06-NIST-REVIEW.md) | NIST 4종 참조 기준 대조 136개 통제 — **인증이 아니라 대조 기록**. 검토가 찾아 고친 결함 3건과 남은 공백 |
 | [docs/STYLE.md](docs/STYLE.md) | 이 문서들을 쓰는 규칙과 배포 전 확인 |
 
 모든 문서는 **Why → What → How** 순서로 쓴다. 숫자의 단일 출처는 `dist/data/anchors.json` 이고, 문서가 그것과 어긋나면 검사가 깨진다.
@@ -115,7 +116,7 @@ npx wrangler pages deploy dist              # 배포
 
 | 경계 | 무엇을 막는가 | 확인 |
 |---|---|---|
-| **오리진 검사** (`functions/api/_llm.js`) | 남의 사이트가 제 페이지에서 우리 엔드포인트를 불러 **우리 OpenAI 키를 쓰는 것**. 허용 오리진 밖은 `E_FORBIDDEN`, 프리플라이트는 403 | 타 오리진·오리진 없음·접두어 흉내(`…pages.dev.evil.com`)·http 전부 거부 |
+| **오리진 검사** (`functions/api/_llm.js`) | 남의 사이트가 제 페이지에서 우리 엔드포인트를 불러 **우리 OpenAI 키를 쓰는 것**. 허용 오리진 밖은 `E_FORBIDDEN`, 프리플라이트는 403 | 타 오리진·오리진 없음·접두어 흉내(`…pages.dev.evil.com`)·http 거부. **로컬 개발 예외는 요청 자체가 localhost 로 들어올 때만 열린다** — 배포본에서는 `http://localhost` 도 거부한다 |
 | **속도 제한** | 버스트. IP당 분 10회(parse)·5회(draft), 아이솔레이트 전체 분 60회 | `scripts/test_verify.mjs` |
 | **CSP** `default-src 'none'` | 주입된 스크립트 실행. 인라인 스크립트도 인라인 `style` 속성도 쓰지 않아 `unsafe-inline` 이 필요 없다 | 콘솔 에러 0건으로 앱 동작 확인 |
 | **HSTS·X-Frame-Options·COOP/CORP·Permissions-Policy·Referrer-Policy** | 다운그레이드, 클릭재킹, 창 참조, 불필요한 브라우저 기능, 리퍼러 유출 | 응답 헤더 실측 |

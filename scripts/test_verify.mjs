@@ -1,6 +1,7 @@
 /* 검증층 검증. 네트워크·키 없이 돈다.  실행: node scripts/test_verify.mjs */
 import assert from "node:assert/strict";
-import { hasDigits, hasForbidden, rangeCheck, allowedOrigin, gate } from "../functions/api/_llm.js";
+import { readFileSync } from "node:fs";
+import { hasDigits, hasForbidden, rangeCheck, allowedOrigin, gate, json } from "../functions/api/_llm.js";
 
 let n = 0; const t = (name, fn) => { fn(); n++; };
 
@@ -14,14 +15,13 @@ const FACTS = {
 };
 
 t("오리진 경계 — 우리 페이지 말고는 이 함수를 부를 수 없다", () => {
-  const req = (origin) => ({ headers: new Map(Object.entries(origin ? { origin } : {})) });
-  // Map 은 get 만 쓰므로 Headers 대용으로 충분하다
-  const ok = (o) => allowedOrigin({ headers: { get: (k) => (k === "origin" ? o : null) } });
+  const PROD = "https://gaengsin-baseline.pages.dev/api/draft";
+  const LOCAL = "http://localhost:8788/api/draft";
+  const ok = (o, url = PROD) =>
+    allowedOrigin({ url, headers: { get: (k) => (k === "origin" ? o : null) } });
 
   assert.equal(ok("https://gaengsin-baseline.pages.dev"), "https://gaengsin-baseline.pages.dev");
   assert.equal(ok("https://4a5e40c6.gaengsin-baseline.pages.dev"), "https://4a5e40c6.gaengsin-baseline.pages.dev");
-  assert.equal(ok("http://localhost:8788"), "http://localhost:8788");
-  assert.equal(ok("http://127.0.0.1:8788"), "http://127.0.0.1:8788");
 
   // 이 넷을 막지 못하면 남의 사이트가 우리 OpenAI 키를 쓴다
   assert.equal(ok("https://evil.example"), null);
@@ -29,11 +29,32 @@ t("오리진 경계 — 우리 페이지 말고는 이 함수를 부를 수 없�
   assert.equal(ok("https://gaengsin-baseline.pages.dev.evil.com"), null);  // 접두어 흉내
   assert.equal(ok("http://gaengsin-baseline.pages.dev"), null);        // https 가 아니다
   assert.equal(ok("not a url"), null);
-  void req;
+
+  // 로컬 개발 예외는 **요청 자체가 로컬로 들어올 때만** 열린다.
+  // 실측(2026-09-18): 배포본이 http://localhost:3000 과 ftp://localhost 를 통과시켰다.
+  // 브라우저는 오리진을 못 속이지만, 이용자 기기의 로컬 개발 서버 페이지는 진짜 그 오리진이다.
+  assert.equal(ok("http://localhost:8788", LOCAL), "http://localhost:8788");
+  assert.equal(ok("http://127.0.0.1:8788", LOCAL), "http://127.0.0.1:8788");
+  assert.equal(ok("http://localhost:3000", PROD), null, "배포본이 localhost 오리진을 받으면 안 된다");
+  assert.equal(ok("http://localhost", PROD), null);
+  assert.equal(ok("https://127.0.0.1", PROD), null);
+  assert.equal(ok("ftp://localhost", LOCAL), null, "http(s) 가 아닌 스킴은 로컬에서도 막는다");
+});
+
+t("함수 응답에도 정적 자산과 같은 보안 헤더가 붙는다", () => {
+  // dist/_headers 는 정적 자산에만 적용된다. 실측(2026-09-18)에서 /api/* 응답에는 셋뿐이었다.
+  const h = json({ ok: true }, "https://gaengsin-baseline.pages.dev").headers;
+  for (const k of ["strict-transport-security", "x-frame-options", "content-security-policy",
+                   "cross-origin-opener-policy", "cross-origin-resource-policy",
+                   "permissions-policy", "x-content-type-options", "referrer-policy"])
+    assert.ok(h.get(k), `${k} 가 함수 응답에 없다`);
+  assert.equal(h.get("cache-control"), "no-store");
+  assert.match(h.get("content-security-policy"), /frame-ancestors 'none'/);
 });
 
 t("gate 는 오리진을 먼저 보고, 통과해야 속도 제한을 센다", () => {
-  const mk = (o, ip) => ({ headers: { get: (k) => (k === "origin" ? o : k === "cf-connecting-ip" ? ip : null) } });
+  const mk = (o, ip) => ({ url: "https://gaengsin-baseline.pages.dev/api/draft",
+                           headers: { get: (k) => (k === "origin" ? o : k === "cf-connecting-ip" ? ip : null) } });
   const bad = gate(mk("https://evil.example", "1.1.1.1"), 5);
   assert.ok(bad.blocked);
   assert.equal(bad.origin, undefined);
@@ -59,6 +80,9 @@ t("모델이 쓴 문장에 숫자가 있으면 버린다", () => {
   assert.equal(hasDigits("같은 법 제6조의3 제1항 제8호를 참고했습니다."), false);
   // '제' 없는 호수는 예외로 두지 않는다 — 동·호수는 애초에 받지 않는 값이라 문안에 나올 이유가 없다
   assert.equal(hasDigits("단서 8호를 참고했습니다."), true);
+  // 면제는 이 서비스가 인용하는 조문에만. 아무 조문이나 빼 주면 틀린 조문이 그대로 나간다.
+  assert.equal(hasDigits("주택임대차보호법 제9조에 따라 회신드립니다."), true);
+  assert.equal(hasDigits("민법 제618조를 참고했습니다."), true);
   // 그 밖의 숫자는 전부 걸린다
   assert.equal(hasDigits("보증금 7,000만원을 제안합니다."), true);
   assert.equal(hasDigits("2026년 10월까지 회신드리겠습니다."), true);
@@ -93,5 +117,10 @@ t("자릿수 사고를 범위 검사가 잡는다 (04-API §5.4.2 실측)", () =
   assert.equal(rangeCheck({ cur_deposit_manwon: 50000, new_deposit_manwon: 45000 }), null);
   assert.equal(rangeCheck({ cur_deposit_manwon: 35000, new_deposit_manwon: 38000, new_monthly_manwon: 0 }), null);
 });
+
+/* 문서가 이 건수를 적고 있다. test_rules.mjs 와 같은 이유로 묶어 둔다. */
+const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
+assert.ok(testDoc.includes(`오리진 경계 ${n}건`),
+  `docs/05-TEST.md 가 검증층 건수를 ${n}건으로 적고 있지 않다`);
 
 console.log(`verify ok — ${n}건`);

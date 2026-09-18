@@ -16,13 +16,22 @@ export const MAX_BODY = 16 * 1024;
 const ORIGIN_SUFFIX = ".gaengsin-baseline.pages.dev";
 const ORIGIN_EXACT = "https://gaengsin-baseline.pages.dev";
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const hostOf = (url) => { try { return new URL(url).hostname; } catch { return ""; } };
+
 export function allowedOrigin(request) {
   const o = request.headers.get("origin");
   if (!o) return null;
   let u;
   try { u = new URL(o); } catch { return null; }
   if (u.protocol === "https:" && (o === ORIGIN_EXACT || u.hostname.endsWith(ORIGIN_SUFFIX))) return o;
-  if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return o;   // 로컬 개발
+
+  // 로컬 개발 예외는 **요청 자체가 로컬에서 서비스될 때만** 연다.
+  // 배포본이 localhost 오리진을 받으면 이용자 기기에서 도는 아무 페이지나 우리 키를 쓴다 —
+  // 브라우저는 오리진을 못 속이지만 로컬 개발 서버의 페이지는 진짜로 그 오리진을 갖는다.
+  // 실측(2026-09-18): 배포본이 http://localhost:3000 과 ftp://localhost 를 통과시켰다.
+  if ((u.protocol === "http:" || u.protocol === "https:")
+      && LOCAL_HOSTS.has(u.hostname) && LOCAL_HOSTS.has(hostOf(request.url))) return o;
   return null;
 }
 
@@ -32,14 +41,27 @@ const cors = (origin) => (origin
 
 /** 성공·실패 모두 HTTP 200. 오류는 본문 code 로 전달한다(04-API §7.4).
  *  클라이언트 분기를 한 곳으로 모으기 위해서다 — 네트워크 실패와 ok:false 둘만 구분하면 된다. */
+/* dist/_headers 는 **정적 자산에만** 적용된다 — 함수 응답에는 우리가 직접 붙여야 한다.
+ * 실측(2026-09-18): /api/* 응답에 이 중 셋만 있었고 HSTS·CSP·프레임·COOP/CORP·권한 정책이 없었다.
+ * README 보안 절은 여섯 종이 붙는다고 적고 있었으므로, 문서가 아니라 코드를 맞춘다. */
+const SECURITY = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-frame-options": "DENY",
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+  "permissions-policy": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()",
+};
+
 export const json = (body, origin = null, extra = {}) =>
   new Response(JSON.stringify(body), {
     status: 200,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      "referrer-policy": "no-referrer",
+      ...SECURITY,
       ...cors(origin), ...extra,
     },
   });
@@ -53,9 +75,9 @@ export const preflight = (request) => {
   return new Response(null, {
     status: origin ? 204 : 403,
     headers: origin
-      ? { ...cors(origin), "access-control-allow-methods": "POST",
+      ? { ...SECURITY, ...cors(origin), "access-control-allow-methods": "POST",
           "access-control-allow-headers": "content-type", "access-control-max-age": "86400" }
-      : { vary: "Origin" },
+      : { ...SECURITY, vary: "Origin" },
   });
 };
 
@@ -130,8 +152,13 @@ const FORBIDDEN = [
 export const hasForbidden = (text) => FORBIDDEN.find((w) => text.includes(w)) || null;
 
 /* 조문 표기. 숫자를 허용 목록에 넣어 검사를 느슨하게 만드는 대신, 조문 자리의 숫자만 스캔에서 뺀다.
- * "제7조"의 7은 통과하고 "7,000만원"의 7000은 걸린다. */
-const STATUTE = /제\s?\d+\s?조(?:의\s?\d+)?|제\s?\d+\s?항|제\s?\d+\s?호/g;
+ * "제7조"의 7은 통과하고 "7,000만원"의 7000은 걸린다.
+ *
+ * 면제는 **이 서비스가 실제로 인용하는 조문에만** 준다. 아무 "제N조"나 빼 주면 모델이
+ * 조문 번호를 틀리게 써도 숫자 검사·금칙어 검사 어느 쪽에도 걸리지 않는다 —
+ * 틀린 조문은 틀린 숫자보다 고치기 어렵다(사용자가 검산할 수 없다).
+ * 목록 밖 조문은 숫자가 남아 hasDigits 에 걸리고 문안이 통째로 폐기된다. */
+const STATUTE = /제\s?6\s?조의\s?3|제\s?7\s?조|제\s?1\s?항|제\s?8\s?호/g;
 
 /* 모델이 쓴 문장에 숫자가 있는가. 숫자 문장은 전부 코드가 쓰므로, 있으면 그 문장을 버린다.
  * ASCII 만 보면 전각 "１２３" 이 그대로 통과한다 — \p{Nd} 로 십진 숫자 전부를 본다.
