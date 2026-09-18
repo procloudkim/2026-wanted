@@ -77,7 +77,7 @@ function fillDong() {
   fillBuildings();
   $("#kind-help").textContent = R.keysFor({ kind, sgg: "x", umd: "x", seq: "x", area: 60 })[0][0] === 1
     ? "같은 단지·같은 면적대끼리 비교합니다."
-    : "이 유형은 원천에 단지 표본이 얇아 같은 동네·비슷한 면적 기준으로 비교합니다.";
+    : "이 유형은 원천에 단지 일련번호가 없어 같은 동네·비슷한 면적 기준으로 비교합니다.";
 }
 
 function fillBuildings() {

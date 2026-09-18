@@ -29,6 +29,9 @@
 /og.png
   Cache-Control: public, max-age=3600
 
-# 데이터 파일은 같은 주기로 묶는다. 앵커만 새로 받고 코호트가 낡으면 두 숫자의 기준일이 갈린다.
+# 자산과 같은 이유로 no-cache 다. 파일명에 기준일도 해시도 없어서, max-age 를 걸면
+# 자산을 새로 만든 뒤 앵커만 옛 파일이 남는 창이 생긴다. 실측: 새 필드(convert)가 없는
+# 옛 앵커를 브라우저가 들고 있어 환산 카드가 "스냅샷을 읽지 못했다"로 내려갔다.
+# 앵커와 코호트의 기준일이 갈리는 것보다 조건부 요청 두 번이 싸다.
 /data/*
-  Cache-Control: public, max-age=600
+  Cache-Control: no-cache
