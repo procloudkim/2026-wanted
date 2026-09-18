@@ -1,0 +1,5 @@
+# Cloudflare Pages 프로젝트 설정. 이 파일이 있으면 `npx wrangler pages deploy` 만으로 배포된다.
+# 비밀값은 여기 두지 않는다 — OPENAI_API_KEY 는 대시보드(Settings → Variables and Secrets)에 넣는다.
+name = "gaengsin-baseline"
+compatibility_date = "2026-09-18"
+pages_build_output_dir = "dist"
