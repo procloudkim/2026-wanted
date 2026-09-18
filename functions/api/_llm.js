@@ -133,8 +133,15 @@ export const hasForbidden = (text) => FORBIDDEN.find((w) => text.includes(w)) ||
  * "제7조"의 7은 통과하고 "7,000만원"의 7000은 걸린다. */
 const STATUTE = /제\s?\d+\s?조(?:의\s?\d+)?|제\s?\d+\s?항|제\s?\d+\s?호/g;
 
-/** 모델이 쓴 문장에 숫자가 있는가. 숫자 문장은 전부 코드가 쓰므로, 있으면 그 문장을 버린다. */
-export const hasDigits = (s) => /\d/.test(String(s).replace(STATUTE, " "));
+/* 모델이 쓴 문장에 숫자가 있는가. 숫자 문장은 전부 코드가 쓰므로, 있으면 그 문장을 버린다.
+ * ASCII 만 보면 전각 "１２３" 이 그대로 통과한다 — \p{Nd} 로 십진 숫자 전부를 본다.
+ * 한글 수사는 단위에 붙은 것만 본다. "이 글", "만나서" 의 이·만까지 잡으면 정상 문장이 남지 않는다. */
+const DIGIT = /\p{Nd}/u;
+const KO_MONEY = /[일이삼사오육칠팔구십백천만억][억만천]?\s?원/;
+export const hasDigits = (s) => {
+  const t = String(s).replace(STATUTE, " ");
+  return DIGIT.test(t) || KO_MONEY.test(t);
+};
 
 /** 자릿수 사고 탐지 (04-API §5.4.2). confidence 는 통과 근거로 쓰지 않는다 —
  *  실측에서 "구억육천만원"을 9,600 으로 읽고도 0.98 을 냈다. 탈락시킬 때만 쓴다. */

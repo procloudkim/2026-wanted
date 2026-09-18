@@ -63,6 +63,15 @@ t("모델이 쓴 문장에 숫자가 있으면 버린다", () => {
   assert.equal(hasDigits("보증금 7,000만원을 제안합니다."), true);
   assert.equal(hasDigits("2026년 10월까지 회신드리겠습니다."), true);
   assert.equal(hasDigits("중앙값은 5%였습니다."), true);
+
+  // ASCII 만 보면 이 둘이 그대로 통과한다 — 화면은 "숫자가 있으면 버린다"고 약속한다
+  assert.equal(hasDigits("보증금 ７，０００만원을 제안합니다."), true);   // 전각 숫자
+  assert.equal(hasDigits("삼억원으로 올려 주시면 합니다."), true);        // 한글 금액 표현
+  assert.equal(hasDigits("만원만 조정해 주시면 합니다."), true);
+
+  // 정상 문장의 '이·만·일'까지 잡으면 인사말이 한 줄도 남지 않는다
+  assert.equal(hasDigits("이 글을 보내는 이유를 먼저 말씀드립니다."), false);
+  assert.equal(hasDigits("만나 뵙고 말씀드리면 좋겠습니다. 감사합니다."), false);
 });
 
 t("법 결론 금칙어", () => {

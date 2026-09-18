@@ -42,8 +42,17 @@ export function fmtMoney(manwon) {
   return sign + v.toLocaleString("ko-KR") + "만원";
 }
 export const fmtPct = (x, d = 2) => (x == null ? "—" : `${halfUp(x, d).toFixed(d)}%`);
-export const fmtN = (n) => (n == null ? "—" : n.toLocaleString("ko-KR"));
+export const fmtN = (n) => (n == null || !isFinite(n) ? "—" : Number(n).toLocaleString("ko-KR"));
 export const fmtDate = (d) => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+
+/* ── 금액 입력 읽기 ────────────────────────────────────────────────────────
+ * 금액 칸은 만원 단위 정수다. 표기를 좁히지 않으면 두 가지가 샌다.
+ *  1) 소수(60000.4) — 정확히 +5.00% 인 계약이 정수 교차 곱 비교에서 초과로 뒤집힌다.
+ *  2) 1e5 · 0x10 — Number() 는 받아들이지만 사용자가 친 금액이 아니다. */
+export const intOf = (v) => {
+  const s = String(v ?? "").replace(/[,\s]/g, "");
+  return /^-?\d+$/.test(s) ? Number(s) : NaN;
+};
 
 /* ── 코호트 키 ─────────────────────────────────────────────────────────────
  * scripts/build_assets.py 의 band()/keys_for() 와 문자열까지 같아야 한다. */

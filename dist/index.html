@@ -150,7 +150,6 @@
               <input id="orent" type="text" inputmode="numeric" value="0">
             </p>
           </div>
-          <small class="err" id="offer-err" hidden></small>
         </div>
 
         <div class="tabpane" data-pane="rate" hidden>
@@ -170,6 +169,9 @@
           <button type="button" class="btn ghost" id="parse-btn">문장에서 금액 읽기</button>
           <p class="confirm" id="parse-out" hidden></p>
         </div>
+
+        <!-- 세 탭이 함께 쓰는 자리. 패널 안에 두면 다른 탭에서 메시지가 보이지 않는다 -->
+        <small class="err" id="offer-err" hidden></small>
       </fieldset>
 
       <details class="more">
@@ -350,7 +352,7 @@
         <h3>두 곳에만 씁니다</h3>
         <p><b>① 읽기</b> — 집주인에게 받은 문장에서 금액을 꺼냅니다. 판정하지 않고, 응답 형식에 판정이 들어갈 자리가 없습니다.</p>
         <p><b>② 인사말 쓰기</b> — 회신 문안의 첫 문장과 끝 문장만 씁니다.
-        <strong>숫자가 든 문장은 전부 코드가 만들고, 모델이 쓴 부분에 숫자가 하나라도 있으면 버립니다.</strong></p>
+        <strong>숫자가 든 문장은 전부 코드가 만들고, 모델이 쓴 부분에 숫자나 금액 표현이 있으면 버립니다.</strong></p>
       </div>
     </div>
     <details class="more">

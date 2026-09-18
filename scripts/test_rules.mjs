@@ -255,6 +255,29 @@ t("금액 표기", () => {
   assert.equal(R.fmtPct(34.47), "34.47%");
   assert.equal(R.fmtPct(2.0, 1), "2.0%");
   assert.equal(R.fmtN(61368), "61,368");
+  assert.equal(R.fmtN(undefined), "—");   // fmtMoney·fmtPct 와 같은 방어를 쓴다
+  assert.equal(R.fmtN(NaN), "—");
+});
+
+/* ── 금액 입력 읽기 — 화면 결함 A2·A11 의 회귀 검사 ─────────────────────── */
+t("금액 칸은 만원 단위 정수만 받는다", () => {
+  assert.equal(R.intOf("60000"), 60000);
+  assert.equal(R.intOf("60,000"), 60000);   // 천 단위 쉼표와 공백은 지운다
+  assert.equal(R.intOf(" 60 000 "), 60000);
+  assert.equal(R.intOf("-100"), -100);
+  assert.equal(R.intOf(0), 0);
+
+  // 소수를 받으면 정확히 +5.00% 인 계약이 "5% 초과"로 뒤집힌다
+  assert.ok(Number.isNaN(R.intOf("60000.4")));
+  assert.equal(R.r1Rate(60000, 63000).is_over_cap, false);
+  assert.equal(R.r1Rate(60000, 63000.02).is_over_cap, true, "소수가 새면 여기서 뒤집힌다");
+
+  // Number() 는 받아들이지만 사용자가 친 금액이 아니다
+  assert.ok(Number.isNaN(R.intOf("1e5")));
+  assert.ok(Number.isNaN(R.intOf("0x10")));
+  assert.ok(Number.isNaN(R.intOf("")));
+  assert.ok(Number.isNaN(R.intOf(null)));
+  assert.ok(Number.isNaN(R.intOf("육만")));
 });
 
 console.log(`rules ok — ${n}건`);

@@ -15,9 +15,10 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
 const today = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
 const parseDate = (s) => { if (!s) return null; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const intOf = (v) => { const n = Number(String(v ?? "").replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : NaN; };
+const intOf = R.intOf;   // 만원 단위 정수만 받는다. 검증은 scripts/test_rules.mjs
 
 const STORE = "gaengsin-input-v1";
+const CHOICE = "gaengsin-choice";
 const S = { index: null, anchors: null, shard: null, v: null, choice: null,
             snapshotFailed: false, amountConfirmed: false };
 
@@ -53,16 +54,23 @@ async function boot() {
 async function loadShard(sgg) {
   if (!sgg || sgg === "OUT") { S.shard = null; return; }
   if (S.shard?.sgg === sgg) return;
+  // 샤드 실패는 부팅 실패와 다르다. 다음 자치구가 성공하면 분포 판정이 되살아나야 하므로
+  // snapshotFailed 를 건드리지 않는다 — decide() 가 !S.shard 로 따로 본다.
   try {
     S.shard = await fetch(`data/cohort/${sgg}.json`).then((r) => r.json());
-  } catch { S.shard = null; S.snapshotFailed = true; }
+  } catch { S.shard = null; }
   fillDong();
 }
 
 function fillDong() {
   const dong = $("#dong"), kind = $("#kind").value;
   dong.innerHTML = "";
-  if (!S.shard) { dong.disabled = true; dong.add(new Option("자치구를 먼저 고르세요", "")); return; }
+  if (!S.shard) {
+    const picked = $("#gu").value && $("#gu").value !== "OUT";
+    dong.disabled = true;
+    dong.add(new Option(picked ? "데이터를 읽지 못했습니다 — 산술 전용" : "자치구를 먼저 고르세요", ""));
+    return;
+  }
   dong.disabled = false;
   dong.add(new Option("선택하세요", ""));
   for (const u of S.shard.umds) dong.add(new Option(u, u));
@@ -89,6 +97,7 @@ function findBuilding(name, umd, kind) {
   if (!S.shard) return { seq: null, candidates: [] };
   const pool = S.shard.buildings.filter((b) => b.kind === kind && (!umd || b.umd === umd));
   const n = normName(name);
+  if (!n) return { seq: null, candidates: [] };   // "" 는 모든 이름에 포함된다
   const exact = pool.find((b) => normName(b.nm) === n);
   if (exact) return { seq: exact.seq, nm: exact.nm, candidates: [] };
   const near = pool.filter((b) => normName(b.nm).includes(n) || n.includes(normName(b.nm))).slice(0, 3);
@@ -114,7 +123,7 @@ function readInput() {
   for (const id of ["gu", "dong", "area", "expiry", "dep", "rent", "bldg", "offer"]) showErr(id, "");
 
   if (!gu) errs.push(["gu", "자치구를 선택해 주세요. 목록에 없는 지역이면 '서울 밖'을 고르세요 — 분포 숫자 없이 기한 계산과 문안 기능만 제공합니다."]);
-  if (gu && gu !== "OUT" && !umd) errs.push(["dong", "법정동을 선택해 주세요."]);
+  if (gu && gu !== "OUT" && S.shard && !umd) errs.push(["dong", "법정동을 선택해 주세요."]);
   if (!(area >= 10 && area <= 300))
     errs.push(["area", area > 0 && area < 10
       ? "전용면적을 ㎡로 넣어 주세요(예: 59.94). 평으로 넣으신 것 같습니다 — 1평은 약 3.3㎡입니다."
@@ -134,7 +143,7 @@ function readInput() {
   if (tab === "rate") {
     const p = Number($("#orate").value);
     if (!(p >= -50 && p <= 100)) errs.push(["offer", "인상률은 −50%에서 100% 사이로 넣어 주세요."]);
-    else { odep = R.round0(dep * (1 + p / 100)); orent = intOf($("#orent").value || 0) || 0; }
+    else odep = R.round0(dep * (1 + p / 100));   // 이 탭에는 월세 칸이 없다. 숨은 값을 읽지 않는다
   } else {
     odep = intOf($("#odep").value); orent = intOf($("#orent").value || 0);
   }
@@ -145,16 +154,20 @@ function readInput() {
   if (gu !== "OUT" && (kind === "아파트" || kind === "오피스텔") && bldgName) {
     const f = findBuilding(bldgName, umd, kind);
     seq = f.seq; candidates = f.candidates;
+    if (f.nm) bldgName = f.nm;   // 라벨에는 입력한 철자가 아니라 원천의 이름을 쓴다
     if (!seq) errs.push(["bldg", "입력하신 건물명을 데이터에서 찾지 못했습니다. 아래 후보 중에서 고르시거나 건물명을 비우고 동네 기준으로 보세요. 직접 고르지 않으면 판정하지 않습니다."]);
   }
 
-  for (const [id, m] of errs) showErr(id, m);
+  const shown = new Set();   // 같은 칸에 두 메시지가 겹치면 먼저 담은 쪽이 더 구체적이다
+  for (const [id, m] of errs) if (!shown.has(id)) { shown.add(id); showErr(id, m); }
   if (errs.length) {
     if (candidates.length) {
       const e = $("#bldg-err");
       e.append(el("span", null, " 후보: " + candidates.map((c) => `<button type="button" class="btn ghost cand" data-nm="${esc(c.nm)}">${esc(c.nm)}</button>`).join(" ")));
     }
-    $(errs[0][0] === "offer" ? "#odep" : `#${errs[0][0]}`)?.focus();
+    // 숨은 탭 패널의 칸으로 포커스를 보내면 사용자는 무엇이 틀렸는지 볼 수 없다
+    const first = errs[0][0];
+    $(`#${first === "offer" ? ({ rate: "orate", text: "otext" }[tab] || "odep") : first}`)?.focus();
     return null;
   }
   return {
@@ -168,7 +181,8 @@ function decide(i) {
   const w = R.r6Window(i.expiry, today(), i.signed);
   const v = { asof: S.anchors?.asof, window: w, input: i, flags: [], mode: "M-10" };
 
-  if (i.gu === "OUT") v.mode = "M-01";
+  if (!S.index) v.mode = "M-03";            // 부팅 실패 — 자치구를 고를 수 없었다. 서울 밖 선언이 아니다
+  else if (i.gu === "OUT") v.mode = "M-01";
   else if (w.d_day < 0) v.mode = "M-02";
   else if (S.snapshotFailed || !S.shard) v.mode = "M-03";
   else if (i.rent > 0 || i.orent > 0) v.mode = "M-04";
@@ -259,7 +273,7 @@ function render(v) {
   // 확인 전에 틀릴 수 있는 값을 화면에 띄우면 되묻는 의미가 없다.
   const holdMoney = v.mode === "M-11";
 
-  $("#s3").hidden = holdMoney || (!v.cohort && !v.rate?.rate_pct && v.mode !== "M-08" && v.mode !== "M-09");
+  $("#s3").hidden = holdMoney || (!v.cohort && v.rate?.rate_pct == null && v.mode !== "M-08" && v.mode !== "M-09");
   if (!$("#s3").hidden) renderVerdict(v);
   $("#s4").hidden = holdMoney || !v.market;
   if (!$("#s4").hidden) renderMarket(v);
@@ -502,14 +516,15 @@ async function makeDraft() {
       body: JSON.stringify({ choice: S.choice, tone: "neutral" }),
       signal: AbortSignal.timeout(15000),
     }).then((x) => x.json());
-    if (r.ok && r.frame) { opening = r.frame.opening; closing = r.frame.closing; source = "llm"; }
+    // 서버가 이미 거른다. 검증층이 한 줄 바뀌어도 화면이 먼저 무너지지 않게 여기서도 본다
+    if (r.ok && r.verified && r.frame) { opening = r.frame.opening; closing = r.frame.closing; source = "llm"; }
   } catch { /* 폴백. 숫자 문장은 애초에 바뀌지 않는다 */ }
 
   const text = [opening, ...lines, closing].join("\n\n");
   out.hidden = false;
   out.innerHTML = `<div class="box">${esc(text)}</div>
     <p class="src">${source === "llm"
-      ? "인사말과 맺음말만 언어 모델이 썼고, <b>숫자가 들어간 문장은 전부 코드가 계산해 그대로 넣었습니다.</b> 모델이 쓴 부분에 숫자가 있으면 폐기합니다."
+      ? "인사말과 맺음말만 언어 모델이 썼고, <b>숫자가 들어간 문장은 전부 코드가 계산해 그대로 넣었습니다.</b> 모델이 쓴 부분에 숫자나 금액 표현이 있으면 폐기합니다."
       : "문장 생성이 동작하지 않아 <b>고정 인사말</b>로 대신합니다. 숫자는 동일합니다."}
     ${esc(CAVEAT)}</p>`;
   btn.disabled = false; btn.textContent = "이 숫자로 회신 문안 만들기";
@@ -528,7 +543,7 @@ async function share() {
     if (navigator.share) { await navigator.share({ title: "갱신 기준선", text, url }); return "shared"; }
     await navigator.clipboard.writeText(`${text}\n${url}`);
     return "copied";
-  } catch { return "failed"; }   // 사용자가 취소한 경우도 여기로 온다
+  } catch (e) { return e?.name === "AbortError" ? "canceled" : "failed"; }
 }
 
 function wireShare(id) {
@@ -536,10 +551,11 @@ function wireShare(id) {
   if (!b) return;
   b.addEventListener("click", async () => {
     const r = await share();
-    if (r === "failed") return;
+    if (r === "canceled") return;
     const label = b.lastChild;
     const before = label.textContent;
-    label.textContent = r === "copied" ? " 링크를 복사했습니다" : " 공유했습니다";
+    label.textContent = r === "failed" ? " 복사하지 못했습니다 — 주소창의 링크를 써 주세요"
+      : r === "copied" ? " 링크를 복사했습니다" : " 공유했습니다";
     setTimeout(() => { label.textContent = before; }, 2500);
   });
 }
@@ -677,13 +693,13 @@ function wire() {
   $("#form").addEventListener("submit", (e) => {
     e.preventDefault();
     const i = readInput();
-    if (!i) return;
+    if (!i) { $("#result").hidden = true; return; }   // 폼 값과 화면 숫자가 어긋난 채 남지 않게
     render(decide(i));
   });
 
   $("#clear-btn").addEventListener("click", () => {
     // 통보 기록(NOTICES)은 지우지 않는다. 계약 입력과 성격이 다르고 되살릴 수 없다.
-    try { localStorage.removeItem(STORE); } catch {}
+    try { localStorage.removeItem(STORE); localStorage.removeItem(CHOICE); } catch {}
     $("#form").reset();
     $("#result").hidden = true;
     $("#deadline-bar").hidden = true;
@@ -723,10 +739,11 @@ function wire() {
   $("#ics-btn").addEventListener("click", () => S.v && downloadICS(S.v));
   $("#draft-btn").addEventListener("click", makeDraft);
   $("#copy-btn").addEventListener("click", async (e) => {
+    const b = e.currentTarget;   // await 뒤에는 currentTarget 이 null 이다
     try {
-      await navigator.clipboard.writeText(e.currentTarget.dataset.text || "");
-      e.currentTarget.lastChild.textContent = " 복사했습니다";
-    } catch { /* 클립보드 권한이 없으면 사용자가 직접 선택해 복사한다 */ }
+      await navigator.clipboard.writeText(b.dataset.text || "");
+      b.lastChild.textContent = " 복사했습니다";
+    } catch { b.lastChild.textContent = " 복사하지 못했습니다 — 아래 문안을 직접 선택해 복사해 주세요"; }
   });
 
   $$(".choice").forEach((b) => b.addEventListener("click", () => {
@@ -734,7 +751,7 @@ function wire() {
     $$(".choice").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     const c = $("#chosen"); c.hidden = false;
     c.innerHTML = `<b>${esc(S.choice)}</b>를 선택하셨습니다 — ${new Date().toLocaleString("ko-KR")}. 이 기록은 <strong>이 브라우저에만</strong> 남습니다.`;
-    try { localStorage.setItem("gaengsin-choice", JSON.stringify({ choice: S.choice, at: Date.now() })); } catch {}
+    try { localStorage.setItem(CHOICE, JSON.stringify({ choice: S.choice, at: Date.now() })); } catch {}
   }));
 }
 
@@ -749,10 +766,16 @@ async function parseText() {
       signal: AbortSignal.timeout(10000),
     }).then((x) => x.json());
     const p = r.parsed || {};
-    if (p.cur_deposit_manwon) $("#dep").value = p.cur_deposit_manwon;
-    if (p.new_deposit_manwon) $("#odep").value = p.new_deposit_manwon;
-    if (p.new_monthly_manwon != null) $("#orent").value = p.new_monthly_manwon;
-    if (p.area_m2) $("#area").value = p.area_m2;
+    // 거절된 응답(ok:false)은 값을 넣지 않는다. 서버가 범위·신뢰도로 버린 숫자가
+    // 판정 입력 칸에 그대로 들어가면 검증층을 통과한 값과 구분되지 않는다.
+    if (r.ok) {
+      if (p.cur_deposit_manwon) $("#dep").value = p.cur_deposit_manwon;
+      if (p.new_deposit_manwon) $("#odep").value = p.new_deposit_manwon;
+      if (p.new_monthly_manwon != null) $("#orent").value = p.new_monthly_manwon;
+      if (p.area_m2) $("#area").value = p.area_m2;
+      S.amountConfirmed = false;   // 금액이 바뀌었으니 자릿수 확인을 다시 받는다
+      save();
+    }
     out.hidden = false;
     out.innerHTML = r.ok
       ? `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>${p.new_monthly_manwon ? `, 제시 월세 <b>${R.fmtMoney(p.new_monthly_manwon)}</b>` : ""}. <strong>맞는지 확인하고 '금액으로' 탭에서 고치실 수 있습니다.</strong> 원문은 저장하지 않았습니다.`
