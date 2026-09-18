@@ -32,8 +32,8 @@
 ```
 ./scripts/test_all.sh
 ├─ python3 scripts/build_assets.py --selftest   ② 수집·집계 (손으로 쓴 XML 픽스처 6행)
-├─ node scripts/test_rules.mjs                  ① 판정 산술·문장 읽기 28건
-├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 6건
+├─ node scripts/test_rules.mjs                  ① 판정 산술·문장 읽기 30건
+├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 8건
 ├─ node scripts/test_contrast.mjs               ④ 색 대비 36쌍
 ├─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조
 └─ node scripts/test_source.mjs                  ⑥ 소스 금지 패턴 17건
@@ -49,7 +49,7 @@
 
 **Why.** 판정은 산술 7종뿐이고 전부 순수 함수다. 산술이 틀리면 나머지 전부가 틀린다. 그리고 입력이 숫자 몇 개뿐이라 **고정 입력–고정 출력으로 완전히 봉인할 수 있는 유일한 계층**이다.
 
-**What.** `dist/assets/rules.js` 의 R1~R7 과 표시 포맷, 폴백 사다리, 금액 입력 파싱, **붙여넣은 문장 읽기**. 28건.
+**What.** `dist/assets/rules.js` 의 R1~R7 과 표시 포맷, 폴백 사다리, 금액 입력 파싱, **붙여넣은 문장 읽기**, 평가셋 라우팅 동결. 30건.
 
 **How.** 기대값은 02-SPEC §3의 검증 표를 그대로 옮긴 것이다. 표가 바뀌면 여기가 먼저 깨져야 한다. 특히 못 박아 둔 것 넷:
 

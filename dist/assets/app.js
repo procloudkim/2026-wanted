@@ -799,8 +799,12 @@ function applyParsed(p) {
  * 자릿수가 3배 밖이면 M-11 이 잡지만, 3억5천을 3억8천으로 잘못 읽는 종류는 배율이 정상이라
  * 어떤 자동 검사에도 걸리지 않는다. 그런데 그 숫자가 협상 자리로 간다. */
 const readLine = (p, where) =>
+  // 확인 줄은 applyParsed 가 **쓰는 칸을 전부** 보여 준다. 빠진 칸이 있으면 사용자는 보지 못한 값을
+  // 확인한 것이 되고, 그 값이 판정에 들어간다. 면적이 그랬다 — 코호트 자체를 바꾸는 값인데
+  // 확인 줄에 없었다. 값이 없으면 "—" 로 적어 "안 건드린다"는 사실도 보이게 한다.
   `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
-  + (p.new_monthly_manwon ? `, 제시 월세 <b>${R.fmtMoney(p.new_monthly_manwon)}</b>` : "")
+  + `, 제시 월세 <b>${p.new_monthly_manwon == null ? "—(그대로 둡니다)" : R.fmtMoney(p.new_monthly_manwon)}</b>`
+  + `, 전용면적 <b>${p.area_m2 == null ? "—(그대로 둡니다)" : `${p.area_m2}㎡`}</b>`
   + `. ${where}`
   + `<span class="rowbtns"><button type="button" class="btn primary" id="parse-ok">맞습니다, 이 값으로</button>`
   + `<button type="button" class="btn ghost" id="parse-no">직접 넣겠습니다</button></span>`;
@@ -825,7 +829,8 @@ async function parseText() {
   try {
     const r = await fetch("/api/parse", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, hint: { sgg_nm: $("#gu").selectedOptions[0]?.text || null } }),
+      // 미선택이면 옵션 문구("선택하세요")가 그대로 힌트로 나간다. 값이 있을 때만 보낸다.
+      body: JSON.stringify({ text, hint: { sgg_nm: $("#gu").value && $("#gu").value !== "OUT" ? $("#gu").selectedOptions[0].text : null } }),
       signal: AbortSignal.timeout(10000),
     }).then((x) => x.json());
     const p = r.parsed || {};

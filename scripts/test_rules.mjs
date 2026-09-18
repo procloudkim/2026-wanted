@@ -2,7 +2,7 @@
  * 기대값은 docs/02-SPEC.md §3 의 검증 표를 그대로 옮긴 것이다. 표가 바뀌면 여기가 먼저 깨져야 한다. */
 import assert from "node:assert/strict";
 import * as R from "../dist/assets/rules.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 /* 화면이 읽는 것과 같은 스냅샷. 상수를 따로 두면 기준일·모수가 어긋난다. */
 const A = JSON.parse(readFileSync(new URL("../dist/data/anchors.json", import.meta.url), "utf8"));
@@ -346,6 +346,47 @@ t("읽은 값은 판정 산술에 그대로 들어간다", () => {
   // 파서 출력도 intOf 와 같은 정수 계약 위에 있다
   for (const v of [r.cur, r.next, r.rent]) assert.ok(Number.isInteger(v));
 });
+
+/* ── 평가셋 라우팅 동결 (decisions/02-llm-model/criteria-v2.md §3 G6) ───────
+ * readAmounts 가 한 줄 넓어지면 LLM 평가의 **분모가 조용히 바뀐다.** 골든셋 21건 중
+ * 몇 건이 규칙으로 가는지를 여기에 못 박아, 문법을 바꾸면 평가 기준부터 깨지게 한다.
+ * decisions/ 는 저장소 밖(gitignore)이라 없으면 건너뛴다 — 제품 검사가 리서치 자산에 묶이지 않는다. */
+const goldenPath = new URL("../decisions/02-llm-model/golden.json", import.meta.url);
+if (existsSync(goldenPath)) {
+  t("평가셋 라우팅이 동결값과 같다", () => {
+    const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
+    const vec = golden.map((c) => (R.readAmounts(c.text).ok ? "r" : "l")).join("");
+    assert.equal(vec, "rllllrlrlllrrllllllrl",
+      "규칙 문법이 바뀌어 평가셋 라우팅이 달라졌다 — criteria 버전을 올리고 전 후보를 다시 평가한다");
+    for (const c of golden) {
+      const got = R.readAmounts(c.text).ok ? "rule" : "llm";
+      assert.equal(got, c.route, `${c.id}: route 가 ${c.route} 인데 실제로는 ${got}`);
+      // 규칙 경로의 기대값은 규칙이 실제로 내는 값이어야 한다
+      if (c.route === "rule") {
+        const r = R.readAmounts(c.text);
+        assert.equal(r.cur, c.want.cur_deposit_manwon, `${c.id}: 종전 보증금`);
+        assert.equal(r.next, c.want.new_deposit_manwon, `${c.id}: 제시 보증금`);
+        assert.equal(r.rent, c.want.new_monthly_manwon, `${c.id}: 제시 월세`);
+        assert.equal(c.want.area_m2, null, `${c.id}: 규칙 경로는 면적을 읽지 않는다`);
+      }
+    }
+  });
+
+  t("두 골든셋이 같은 문형에 다른 정답을 동결하지 않는다", () => {
+    // 실측 사고: golden G06 은 월세 0, 이 파일의 PASTES 는 같은 문형에 null 을 기대했고
+    // 둘 다 통과했다. 어느 쪽을 고쳐도 회귀 검사가 깨지지 않는 상태였다.
+    const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
+    const norm = (s) => String(s).replace(/[\s,·]/g, "");
+    for (const c of golden.filter((x) => x.route === "rule")) {
+      for (const [text, want] of PASTES) {
+        if (want === null || !text) continue;
+        if (norm(text) !== norm(c.text)) continue;
+        assert.equal(want.rent, c.want.new_monthly_manwon,
+          `같은 문장을 두 곳이 다르게 기대한다: ${c.id}`);
+      }
+    }
+  });
+}
 
 /* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다. */
 const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");

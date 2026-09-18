@@ -1,6 +1,7 @@
 /* 검증층 검증. 네트워크·키 없이 돈다.  실행: node scripts/test_verify.mjs */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { hasDigits, hasForbidden, rangeCheck, allowedOrigin, gate, json } from "../functions/api/_llm.js";
 
 let n = 0; const t = (name, fn) => { fn(); n++; };
@@ -118,7 +119,41 @@ t("자릿수 사고를 범위 검사가 잡는다 (04-API §5.4.2 실측)", () =
   assert.equal(rangeCheck({ cur_deposit_manwon: 35000, new_deposit_manwon: 38000, new_monthly_manwon: 0 }), null);
 });
 
-/* 문서가 이 건수를 적고 있다. test_rules.mjs 와 같은 이유로 묶어 둔다. */
+/* ── 프롬프트·검증층 상수 동결 (criteria-v2 §3 G6) ──────────────────────────
+ * 이것들이 바뀌면 저장된 모델 평가 결과가 **무효**가 된다. 조용히 바뀌지 않게 해시로 묶는다.
+ * 값을 고치는 것은 자유다 — 다만 고치는 순간 이 검사가 깨져서 "평가를 다시 해야 한다"를 알린다. */
+t("모델 평가의 전제(프롬프트·검증층 상수)가 동결값과 같다", () => {
+  const sha = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
+  const strip = (s) => s.replace(/\/\/[^\n]*/g, "");
+  const parseSrc = readFileSync(new URL("../functions/api/parse.js", import.meta.url), "utf8");
+  const llmSrc = readFileSync(new URL("../functions/api/_llm.js", import.meta.url), "utf8");
+
+  const SYSTEM = parseSrc.match(/const SYSTEM = `(.*?)`;/s)[1];
+  assert.equal(sha(SYSTEM), "24d3e13a7641e7c4", "parse 의 SYSTEM 프롬프트가 바뀌었다 — 모델 평가를 다시 해야 한다");
+
+  const required = [...parseSrc.match(/required: \[(.*?)\]/s)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(required.length, 12);
+  assert.equal(sha(required.join("|")), "e1f67371ab30be6d", "parse 의 응답 스키마가 바뀌었다");
+
+  const forbidden = [...strip(llmSrc.match(/const FORBIDDEN = \[(.*?)\];/s)[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(forbidden.length, 20);
+  assert.equal(sha(forbidden.join("|")), "0fc847fc8ccd9879", "금칙어 목록이 바뀌었다");
+
+  assert.equal(sha(llmSrc.match(/const STATUTE = (\/.*?\/g);/)[1]), "bb52aa80b78bb72f", "조문 면제 패턴이 바뀌었다");
+});
+
+t("숫자 검사가 무엇을 통과시키는지 — 천장을 적어 둔다", () => {
+  // 모델이 숫자를 못 쓰게 막는 것이 목적인데, 이 검사는 아라비아·전각 숫자와 한글 금액 표현만 본다.
+  // 아래는 **통과한다**. 화면이 약속하지 않는 범위를 여기 고정해 두어, 나중에 넓힐 때 무엇이 남았는지 보이게 한다.
+  for (const s of ["일억 정도로 알고 있습니다", "보증금을 두 배로", "다음 달 말일까지", "③억 수준으로"])
+    assert.equal(hasDigits(s), false, `천장이 바뀌었다(이제 걸린다): ${s}`);
+  for (const s of ["삼억오천만원", "１２３만원", "제10조", "35,000만원"])
+    assert.equal(hasDigits(s), true, `막아야 하는데 통과한다: ${s}`);
+  // draft 모델은 숫자도 판정 딕셔너리도 받지 않으므로(draft.js), 통과한 수량 표현은 전부 지어낸 것이다.
+});
+
+/* 문서가 이 건수를 적고 있다. test_rules.mjs 와 같은 이유로 묶어 둔다.
+ * **모든 t() 뒤에 두어야 한다** — 중간에 두면 그 시점의 건수만 세고 뒤에 붙은 검사를 놓친다. */
 const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
 assert.ok(testDoc.includes(`오리진 경계 ${n}건`),
   `docs/05-TEST.md 가 검증층 건수를 ${n}건으로 적고 있지 않다`);
