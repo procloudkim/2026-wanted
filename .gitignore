@@ -1,0 +1,30 @@
+# 비밀값
+.env
+.env.*
+!.env.sample
+
+# 내부 리서치·전략 (경쟁 노출 방지, 로컬 보관)
+decisions/
+sessions/
+wanted_ai_championship_2026_facts.md
+wanted_ai_championship_2026_deepdive.md
+
+# 플러그인 스킬 (외부 자산)
+.claude/
+
+# 대용량 원본 데이터 (재현은 스크립트로)
+*.csv
+*.zip
+data/raw/
+
+# 파이썬
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 다른 스킬이 만든 임시 산출물
+test-mock-page/
