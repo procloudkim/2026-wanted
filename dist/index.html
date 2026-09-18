@@ -164,7 +164,7 @@
           <p class="field">
             <label for="otext">집주인에게 받은 문장</label>
             <textarea id="otext" rows="3" maxlength="1000" placeholder="전세 3억5천인데 3억8천으로 올려달라고 하시네요"></textarea>
-            <small class="help">읽어서 금액으로 바꾸기만 합니다. <strong>원문은 저장하지 않습니다.</strong></small>
+            <small class="help">읽어서 금액으로 바꾸기만 합니다. 정형 문장은 <strong>브라우저 안에서 읽고 서버로 보내지 않습니다.</strong> 넘어가는 경우에도 <strong>원문은 저장하지 않습니다.</strong></small>
           </p>
           <button type="button" class="btn ghost" id="parse-btn">문장에서 금액 읽기</button>
           <p class="confirm" id="parse-out" hidden></p>
@@ -350,7 +350,7 @@
       </div>
       <div class="ai-yes">
         <h3>두 곳에만 씁니다</h3>
-        <p><b>① 읽기</b> — 집주인에게 받은 문장에서 금액을 꺼냅니다. 판정하지 않고, 응답 형식에 판정이 들어갈 자리가 없습니다.</p>
+        <p><b>① 읽기</b> — 집주인에게 받은 문장에서 금액을 꺼냅니다. 판정하지 않고, 응답 형식에 판정이 들어갈 자리가 없습니다. <strong>&ldquo;3억5천에서 3억8천으로&rdquo; 같은 정형 문장은 모델을 부르지 않고 브라우저 안에서 읽습니다</strong> — 그 경우 문장이 서버로 나가지 않습니다.</p>
         <p><b>② 인사말 쓰기</b> — 회신 문안의 첫 문장과 끝 문장만 씁니다.
         <strong>숫자가 든 문장은 전부 코드가 만들고, 모델이 쓴 부분에 숫자나 금액 표현이 있으면 버립니다.</strong></p>
       </div>

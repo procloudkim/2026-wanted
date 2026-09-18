@@ -287,4 +287,69 @@ t("금액 칸은 만원 단위 정수만 받는다", () => {
   assert.ok(Number.isNaN(R.intOf("육만")));
 });
 
+/* ── 문장에서 금액 읽기 ─────────────────────────────────────────────────────
+ * 합격 기준은 처리율이 아니라 **조용한 오수락 0건**이다. 아래 표의 모든 문장에 대해
+ * 파서는 "정확한 값" 또는 "읽지 않음" 둘 중 하나여야 한다. 틀린 값을 내면 실패다.
+ *
+ * 읽지 않는 문장은 언어 모델(/api/parse)로 넘어가고 거기서 다시 범위 검사와
+ * 신뢰도 게이트를 지난다. 읽지 않는 것은 비용이지만 되돌릴 수 있다. */
+const PASTES = [
+  // [문장, 기대 — null 이면 "읽지 않아야 한다"]
+  ["전세 3억5천인데 3억8천으로 올려달라고 하시네요", { cur: 35000, next: 38000, rent: 0 }],
+  ["보증금 3억에서 3억2천으로 올리고 싶다고 하시네요", { cur: 30000, next: 32000, rent: null }],
+  ["3억5천 → 3억8천", { cur: 35000, next: 38000, rent: null }],
+  ["전세 5억인데 5억5천으로 올려달래요", { cur: 50000, next: 55000, rent: 0 }],
+  ["6억에서 6억4800만원으로", { cur: 60000, next: 64800, rent: null }],
+  ["35,000만원에서 38,000만원으로 올려주세요", { cur: 35000, next: 38000, rent: null }],
+  ["5천만에서 6천만으로", { cur: 5000, next: 6000, rent: null }],
+  // 세린 — 보증금 유지 + 월세. 감액분 0이라 R7 이 순증으로 분기한다
+  ["전세 2억4천에서 2억4천 유지하고 월세 60 받겠다고", { cur: 24000, next: 24000, rent: 60 }],
+  ["전세 3억5천에서 3억8천으로. 월 60만원도 달라네요", { cur: 35000, next: 38000, rent: 60 }],
+  // 날짜가 섞여도 "12월 20일"의 20을 월세로 읽지 않는다 (실측 회귀)
+  ["12월 20일 만기인데 전세 3억5천에서 3억8천으로", { cur: 35000, next: 38000, rent: 0 }],
+
+  // ── 아래는 전부 "읽지 않아야" 한다 ──
+  ["3억8천으로 올려달래요. 지금은 3억5천입니다", null],   // 역순. 순서를 믿을 수 없다
+  ["월세만 65로 올려달래요", null],                        // 보증금이 없다
+  ["보증금 3억 유지하고 월세 60", null],                   // 보증금이 하나뿐 — 종전인지 제시인지 모른다
+  ["작년에 3억이었는데 지금 3억5천에서 4억으로", null],     // 과거 계약이 섞였다
+  ["관리비 포함 3억5천에서 3억8천", null],                 // 관리비가 섞였다
+  ["구억육천만원에서 십억으로", null],                     // 한글 수사는 읽지 않는다
+  ["만기가 2026년 12월 20일입니다", null],                 // 금액이 없다
+  ["전세 3억5천에서 12억으로 올려달래요", null],           // +243% — 범위 밖
+  ["500만원에서 600만원으로", null],                       // 보증금 하한 미만. 월세·관리비와 구분되지 않는다
+  ["3억5천 3억8천", null],                                 // 방향 표시가 없다
+  ["", null],
+  [null, null],
+];
+
+t("붙여넣은 문장 — 정확히 읽거나, 읽지 않거나", () => {
+  for (const [text, want] of PASTES) {
+    const got = R.readAmounts(text);
+    if (want === null) {
+      assert.equal(got.ok, false, `읽지 않아야 하는데 읽었다: ${JSON.stringify(text)} → ${JSON.stringify(got)}`);
+      assert.ok(["NO_AMOUNT", "AMBIGUOUS_ROLE", "UNSUPPORTED_SYNTAX", "OUT_OF_RANGE"].includes(got.reason),
+        `사유가 목록에 없다: ${got.reason}`);
+    } else {
+      assert.deepEqual(got, { ok: true, ...want }, `잘못 읽었다: ${JSON.stringify(text)}`);
+    }
+  }
+});
+
+t("읽은 값은 판정 산술에 그대로 들어간다", () => {
+  // 파서가 낸 값이 R1·R2 와 같은 단위·같은 정수여야 한다. 만원 정수 계약을 유지한다.
+  const r = R.readAmounts("전세 6억인데 6억4800만원으로 올려달라고 하시네요");
+  assert.deepEqual(r, { ok: true, cur: 60000, next: 64800, rent: 0 });
+  assert.equal(R.r1Rate(r.cur, r.next).rate_pct, 8.0);
+  assert.equal(R.r2Cap(r.cur, r.next).deposit, 63000);
+  assert.equal(R.r2Cap(r.cur, r.next).excess, 1800);
+  // 파서 출력도 intOf 와 같은 정수 계약 위에 있다
+  for (const v of [r.cur, r.next, r.rent]) assert.ok(Number.isInteger(v));
+});
+
+/* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다. */
+const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
+assert.ok(testDoc.includes(`${n}건`),
+  `docs/05-TEST.md 가 검사 건수를 ${n}건으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
+
 console.log(`rules ok — ${n}건`);

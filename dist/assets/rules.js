@@ -54,6 +54,84 @@ export const intOf = (v) => {
   return /^-?\d+$/.test(s) ? Number(s) : NaN;
 };
 
+/* ── 문장에서 금액 읽기 ────────────────────────────────────────────────────
+ * Why: "전세 3억5천인데 3억8천으로" 같은 정형 문장은 산술로 읽힌다. 이런 문장까지
+ * 언어 모델에 보내면 네트워크·키·비결정성이 붙고 **원문이 브라우저 밖으로 나간다.**
+ * 읽을 수 있으면 여기서 읽고, 애매하면 읽지 않는다 — 읽지 않는 것은 언어 모델로
+ * 넘어갈 뿐이지만, 틀린 값을 조용히 채우는 것은 되돌릴 수 없다.
+ *
+ * 그래서 이 파서의 성공 기준은 처리율이 아니라 **조용한 오수락 0건**이다.
+ * 문법을 일부러 좁게 둔다 — 보증금 두 개와 전세/월세 표시가 전부다.
+ *
+ * ponytail: 한글 수사("구억육천")는 읽지 않는다. 언어 모델이 자릿수를 틀렸던 바로 그
+ * 표기라 결정론으로 읽을 값어치가 있지만, 문법이 두 배가 된다. 넓히려면 AMOUNT 에
+ * 토큰을 더하고 golden 에 기대값을 먼저 적는다. */
+
+/** 보증금 후보의 하한(만원). 이보다 작으면 월세·관리비와 구분되지 않아 읽지 않는다. */
+const DEPOSIT_FLOOR = 1000;
+
+/* 읽지 않는 문장. 이 낱말이 있으면 금액이 어느 계약의 것인지 문장만으로 정해지지 않는다. */
+const NOT_OURS = /관리비|주차|중개|복비|작년|재작년/;
+
+/* "3억5천" "3억 5000" "6억" "5천만" "35000만" — 단위가 붙은 것만 금액으로 본다.
+ * 단위 없는 맨숫자를 금액으로 읽으면 "2026년"이 2026만원이 된다. */
+const AMOUNT = /(\d+)억(?:(\d+)(천|백|십)?만?)?|(\d+)천만|(\d+)만/g;
+const SCALE = { 천: 1000, 백: 100, 십: 10 };
+
+/* 월세는 "월세 60"처럼 단위 없이 오는 것이 흔하다. 다만 맨 "월"에 붙은 숫자까지 월세로 읽으면
+ * "12월 20일"의 20이 월세가 된다 — 실제로 그렇게 읽혔다. "월"은 만 단위가 붙은 것만 본다. */
+const RENT = /월세\s*(\d+)\s*만?\s*원?|월\s*(\d+)\s*만\s*원?/;
+
+/* 두 금액 사이에 "어디서 어디로"를 말하는 표시가 있어야 종전→제시로 읽는다.
+ * 없으면 순서를 믿을 수 없다 — "3억8천으로 올려달래요. 지금은 3억5천입니다"가 뒤집힌다. */
+const DIRECTION = /에서|인데|이었는데|이고|부터|→|->/;
+
+const amountsIn = (t) => {
+  const out = [];
+  AMOUNT.lastIndex = 0;
+  for (let m; (m = AMOUNT.exec(t));) {
+    const [, eok, rest, unit, cheonman, man] = m;
+    const v = eok ? Number(eok) * 10000 + (rest ? Number(rest) * (SCALE[unit] || 1) : 0)
+      : cheonman ? Number(cheonman) * 1000 : Number(man);
+    out.push({ v, start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+};
+
+/**
+ * 문장 → 금액. 확실할 때만 값을 낸다.
+ * @returns {{ok: true, cur: number, next: number, rent: number|null}
+ *          | {ok: false, reason: "NO_AMOUNT"|"AMBIGUOUS_ROLE"|"UNSUPPORTED_SYNTAX"|"OUT_OF_RANGE"}}
+ */
+export function readAmounts(text) {
+  const t = String(text ?? "").replace(/(\d),(?=\d{3})/g, "$1");
+  if (NOT_OURS.test(t)) return { ok: false, reason: "UNSUPPORTED_SYNTAX" };
+
+  // 월세를 먼저 떼어 낸다. 떼지 않으면 보증금 후보로 다시 세어진다.
+  const rm = t.match(RENT);
+  const rent = rm ? Number(rm[1] ?? rm[2]) : (/전세/.test(t) ? 0 : null);
+  const body = rm ? t.slice(0, rm.index) + " " + t.slice(rm.index + rm[0].length) : t;
+
+  const found = amountsIn(body);
+  if (!found.length) return { ok: false, reason: "NO_AMOUNT" };
+  if (found.some((a) => a.v < DEPOSIT_FLOOR)) return { ok: false, reason: "UNSUPPORTED_SYNTAX" };
+
+  // 보증금이 정확히 둘일 때만 "종전 → 제시"로 읽는다. 하나뿐이면 어느 쪽인지 문장이 말하지 않는다.
+  if (found.length !== 2) return { ok: false, reason: found.length === 1 ? "AMBIGUOUS_ROLE" : "UNSUPPORTED_SYNTAX" };
+  if (!DIRECTION.test(body.slice(found[0].end, found[1].start)))
+    return { ok: false, reason: "AMBIGUOUS_ROLE" };
+
+  const cur = found[0].v, next = found[1].v;
+  // 서버 검증층(rangeCheck)과 같은 경계다. 규칙 경로라고 방어선을 건너뛰지 않는다.
+  const bad = (v) => !(v >= 1 && v <= 500000);
+  if (bad(cur) || bad(next)) return { ok: false, reason: "OUT_OF_RANGE" };
+  if (rent != null && !(rent >= 0 && rent <= 1000)) return { ok: false, reason: "OUT_OF_RANGE" };
+  const rate = ((next - cur) / cur) * 100;
+  if (rate < -50 || rate > 200) return { ok: false, reason: "OUT_OF_RANGE" };
+
+  return { ok: true, cur, next, rent };
+}
+
 /* ── 코호트 키 ─────────────────────────────────────────────────────────────
  * scripts/build_assets.py 의 band()/keys_for() 와 문자열까지 같아야 한다. */
 

@@ -765,9 +765,39 @@ function wire() {
   }));
 }
 
+/** 읽은 값을 판정 입력 칸에 넣는다. 규칙 경로와 언어 모델 경로가 **같은 자리**를 지난다 —
+ *  어느 쪽으로 읽었든 이후 방어선(readInput 범위 검사 → M-11 자릿수 되묻기)은 동일하다. */
+function applyParsed(p) {
+  if (p.cur_deposit_manwon) $("#dep").value = p.cur_deposit_manwon;
+  if (p.new_deposit_manwon) $("#odep").value = p.new_deposit_manwon;
+  if (p.new_monthly_manwon != null) $("#orent").value = p.new_monthly_manwon;
+  if (p.area_m2) $("#area").value = p.area_m2;
+  S.amountConfirmed = false;   // 금액이 바뀌었으니 자릿수 확인을 다시 받는다
+  save();
+}
+
+const readLine = (p, where) =>
+  `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
+  + (p.new_monthly_manwon ? `, 제시 월세 <b>${R.fmtMoney(p.new_monthly_manwon)}</b>` : "")
+  + `. <strong>맞는지 확인하고 '금액으로' 탭에서 고치실 수 있습니다.</strong> ${where}`;
+
+const MANUAL = `<strong>'금액으로' 탭에 직접 넣어 주세요.</strong>`;
+
 async function parseText() {
   const btn = $("#parse-btn"), out = $("#parse-out"), text = $("#otext").value.trim();
   if (!text) return;
+
+  // 읽을 수 있는 문장은 브라우저에서 읽는다. 네트워크도, 키도, 원문 전송도 없다.
+  // 애매하면 읽지 않고 언어 모델로 넘긴다 — 틀린 값을 조용히 채우지 않는 것이 먼저다.
+  const rule = R.readAmounts(text);
+  if (rule.ok) {
+    const p = { cur_deposit_manwon: rule.cur, new_deposit_manwon: rule.next, new_monthly_manwon: rule.rent };
+    applyParsed(p);
+    out.hidden = false;
+    out.innerHTML = readLine(p, "이 문장은 <strong>브라우저 안에서 읽었습니다 — 서버로 보내지 않았습니다.</strong>");
+    return;
+  }
+
   btn.disabled = true; btn.textContent = "읽는 중…";
   try {
     const r = await fetch("/api/parse", {
@@ -778,21 +808,14 @@ async function parseText() {
     const p = r.parsed || {};
     // 거절된 응답(ok:false)은 값을 넣지 않는다. 서버가 범위·신뢰도로 버린 숫자가
     // 판정 입력 칸에 그대로 들어가면 검증층을 통과한 값과 구분되지 않는다.
-    if (r.ok) {
-      if (p.cur_deposit_manwon) $("#dep").value = p.cur_deposit_manwon;
-      if (p.new_deposit_manwon) $("#odep").value = p.new_deposit_manwon;
-      if (p.new_monthly_manwon != null) $("#orent").value = p.new_monthly_manwon;
-      if (p.area_m2) $("#area").value = p.area_m2;
-      S.amountConfirmed = false;   // 금액이 바뀌었으니 자릿수 확인을 다시 받는다
-      save();
-    }
+    if (r.ok) applyParsed(p);
     out.hidden = false;
     out.innerHTML = r.ok
-      ? `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>${p.new_monthly_manwon ? `, 제시 월세 <b>${R.fmtMoney(p.new_monthly_manwon)}</b>` : ""}. <strong>맞는지 확인하고 '금액으로' 탭에서 고치실 수 있습니다.</strong> 원문은 저장하지 않았습니다.`
-      : `문장에서 조건을 충분히 읽지 못했습니다. <strong>'금액으로' 탭에 직접 넣어 주세요.</strong>`;
+      ? readLine(p, "원문은 저장하지 않았습니다.")
+      : `문장에서 조건을 충분히 읽지 못했습니다. ${MANUAL}`;
   } catch {
     out.hidden = false;
-    out.innerHTML = `문장을 자동으로 읽지 못했습니다. <strong>'금액으로' 탭에 직접 넣어 주세요.</strong> 판정 기능은 그대로 동작합니다.`;
+    out.innerHTML = `문장을 자동으로 읽지 못했습니다. ${MANUAL} 판정 기능은 그대로 동작합니다.`;
   }
   btn.disabled = false; btn.textContent = "문장에서 금액 읽기";
 }
