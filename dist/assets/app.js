@@ -65,6 +65,8 @@ async function loadShard(sgg) {
 function fillDong() {
   const dong = $("#dong"), kind = $("#kind").value;
   dong.innerHTML = "";
+  // 건물명 칸은 유형만으로 정해진다. 자치구를 고르기 전에도, 샤드를 못 읽어도 맞아야 한다.
+  $("#bldg-field").hidden = kind !== "아파트";
   if (!S.shard) {
     const picked = $("#gu").value && $("#gu").value !== "OUT";
     dong.disabled = true;
