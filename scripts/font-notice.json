@@ -1,0 +1,22 @@
+{
+  "_note": "제3자 글꼴 고지와 바이너리의 지문. 소스가 아니라 데이터로 두는 이유는 test_source.mjs 의 '긴 16진 문자열 금지' 규칙을 약화시키지 않기 위해서다.",
+  "notice": {
+    "path": "dist/assets/fonts/OFL.txt",
+    "upstream": "https://raw.githubusercontent.com/google/fonts/1b22086d13bdbbf5ec63d01a39a49246e4ac355f/ofl/atkinsonhyperlegible/OFL.txt",
+    "upstream_repo": "google/fonts",
+    "upstream_path": "ofl/atkinsonhyperlegible/OFL.txt",
+    "revision": "1b22086d13bdbbf5ec63d01a39a49246e4ac355f",
+    "retrieved_at": "2026-09-19",
+    "bytes": 4352,
+    "sha256": "f32d22b3908fcad2c86a74000614ec22e6a7f66ea7e867e616026a27aebdc143",
+    "copyright_first_line": "Copyright 2020 Braille Institute of America, Inc.",
+    "license_header": "SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007"
+  },
+  "family": "Atkinson Hyperlegible",
+  "fonts": {
+    "atkinson-400-latin-ext.woff2": "61eeb0eb8b881a84d069e67be1723f5b353b0b9b866ad8e7ad9dba66cdc4dabd",
+    "atkinson-400-latin.woff2": "d64ba838ef5472bba248620ec4fd8b5aa7cf0db2908e0bb230600caf279ba7bc",
+    "atkinson-700-latin-ext.woff2": "840ced16f975d8abc2594b436d0206649e0c2a7327e36750ff849d3d37c3c02e",
+    "atkinson-700-latin.woff2": "140e2bd25a7315c8a062508391426b0d8c3297400c947b8d847be28f73a199f0"
+  }
+}

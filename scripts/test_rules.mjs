@@ -2,6 +2,7 @@
  * 기대값은 docs/02-SPEC.md §3 의 검증 표를 그대로 옮긴 것이다. 표가 바뀌면 여기가 먼저 깨져야 한다. */
 import assert from "node:assert/strict";
 import * as R from "../dist/assets/rules.js";
+import { areaM2 as serverAreaM2 } from "../functions/api/_llm.js";
 import { readFileSync, existsSync } from "node:fs";
 
 /* 화면이 읽는 것과 같은 스냅샷. 상수를 따로 두면 기준일·모수가 어긋난다. */
@@ -387,6 +388,38 @@ if (existsSync(goldenPath)) {
     }
   });
 }
+
+t("면적 계약이 브라우저와 서버에서 같다", () => {
+  // 같은 계약을 두 런타임에 따로 두었다(함수가 브라우저 판정 모듈을 import 할 이유가 없다).
+  // 따로 둔 값은 언젠가 갈라진다 — 갈라지면 여기서 깨진다.
+  const CASES = [10, 59.94, 84.9, 300, 0, 9.99, 300.01, -1, NaN, Infinity, null, undefined,
+                 "84.9", "<img src=x onerror=BAD>", true, false, [84.9], { v: 84.9 }];
+  for (const v of CASES)
+    assert.equal(R.areaM2(v), serverAreaM2(v),
+      `두 구현이 다르게 판단한다: ${JSON.stringify(v)} → 브라우저 ${R.areaM2(v)} / 서버 ${serverAreaM2(v)}`);
+});
+
+t("확인 줄의 면적 칸에 마크업이 들어갈 수 없다", () => {
+  // 실측 결함(F-12): `${p.area_m2}㎡` 로 모델이 준 값을 그대로 innerHTML 에 넣고 있었다.
+  // ① 화면 코드가 안전한 헬퍼를 지나는지 원문으로 확인한다.
+  const app = readFileSync(new URL("../dist/assets/app.js", import.meta.url), "utf8");
+  const cell = app.match(/\+ `, 전용면적 <b>\$\{([^}]*)\}<\/b>`/);
+  assert.ok(cell, "확인 줄의 면적 칸을 찾지 못했다 — 표현이 바뀌었으면 이 검사도 같이 고친다");
+  assert.ok(/R\.fmtArea\(p\.area_m2\)/.test(cell[1]),
+    `면적 칸이 fmtArea 를 지나지 않는다: ${cell[1]}`);
+  assert.ok(!/\bp\.area_m2\s*\}/.test(cell[1]), "면적 원값이 그대로 보간된다");
+
+  // ② 그 헬퍼가 어떤 입력에도 마크업을 만들지 않는지 본다.
+  for (const v of [84.9, 10, 300, null, undefined, 0, 3000, "84.9", true, [1],
+                   "<img src=x onerror=BAD>", "</b><script>BAD</script><b>", { toString: () => "<b>x</b>" }]) {
+    const out = R.fmtArea(v);
+    assert.ok(out === null || /^[0-9]+(\.[0-9]+)?㎡$/.test(out),
+      `면적 표시 문자열이 계약을 벗어난다: ${JSON.stringify(v)} → ${JSON.stringify(out)}`);
+  }
+  // ③ 값이 없을 때의 문구는 "그대로 둡니다" — 0 이나 지어낸 면적이 되지 않는다.
+  assert.equal(R.fmtArea(null), null);
+  assert.equal(R.areaM2(0), null, "0 이 면적으로 들어가면 band() 가 코호트를 바꾼다");
+});
 
 /* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다. */
 const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");

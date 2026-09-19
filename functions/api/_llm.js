@@ -110,9 +110,36 @@ export const emit = (ev, code, t0) => {
   try { console.log(JSON.stringify({ ev, code, ms: Date.now() - t0 })); } catch { /* 신호 때문에 요청이 죽지 않는다 */ }
 };
 
+/* 본문을 **바이트로 세면서** 읽고 상한을 넘으면 그 자리에서 끊는다.
+ * 실측(2026-09-19): 예전 구현은 `raw.length`(UTF-16 코드 단위)를 셌다. 한글 16,000자는
+ * length 16,000 이지만 실제로는 48,000 바이트다 — 적어 둔 16KB 의 3배가 통과했다.
+ * 게다가 본문을 전부 버퍼에 담은 뒤에 재고 있었다. 이제 초과하는 순간 reader 를 취소한다.
+ * 플랫폼 요청 상한이 앞에 하나 더 있지만, 그것은 우리 계약이 아니다. */
 export async function readBody(request) {
-  const raw = await request.text();
-  if (raw.length > MAX_BODY) return { err: "E_INPUT_INVALID" };
+  let raw;
+  const stream = request.body;
+  if (stream && typeof stream.getReader === "function") {
+    const reader = stream.getReader();
+    const chunks = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_BODY) { await reader.cancel(); return { err: "E_INPUT_INVALID" }; }
+        chunks.push(value);
+      }
+    } catch { return { err: "E_INPUT_INVALID" }; }
+    const all = new Uint8Array(bytes);
+    let at = 0;
+    for (const c of chunks) { all.set(c, at); at += c.byteLength; }
+    raw = new TextDecoder().decode(all);
+  } else {
+    // 스트림이 없는 환경(일부 테스트 런타임)에서는 읽은 뒤 바이트로 잰다.
+    raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_BODY) return { err: "E_INPUT_INVALID" };
+  }
   try { return { body: JSON.parse(raw) }; } catch { return { err: "E_INPUT_INVALID" }; }
 }
 
@@ -188,6 +215,14 @@ export const hasDigits = (s) => {
   const t = String(s).replace(STATUTE, " ");
   return DIGIT.test(t) || KO_MONEY.test(t);
 };
+
+/** 면적 계약 (02-SPEC §2, `#area` 의 min/max 와 같은 값).
+ *  **숫자가 아니면 받지 않는다.** 스키마가 number 라고 선언했으므로 "84.9" 같은 숫자 문자열도
+ *  계약 위반이다 — 관대한 강제 변환은 형 검사가 아니다.
+ *  실측(2026-09-19): 이 검사가 없어서 모델이 돌려준 문자열이 그대로 확인 줄의 innerHTML 로 갔다.
+ *  범위를 벗어난 숫자(3000)도 그대로 판정 입력 후보가 됐다. */
+export const areaM2 = (v) =>
+  (typeof v === "number" && Number.isFinite(v) && v >= 10 && v <= 300 ? v : null);
 
 /** 자릿수 사고 탐지 (04-API §5.4.2). confidence 는 통과 근거로 쓰지 않는다 —
  *  실측에서 "구억육천만원"을 9,600 으로 읽고도 0.98 을 냈다. 탈락시킬 때만 쓴다. */

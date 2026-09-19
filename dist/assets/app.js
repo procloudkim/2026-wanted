@@ -789,7 +789,8 @@ function applyParsed(p) {
   if (p.cur_deposit_manwon) $("#dep").value = p.cur_deposit_manwon;
   if (p.new_deposit_manwon) $("#odep").value = p.new_deposit_manwon;
   if (p.new_monthly_manwon != null) $("#orent").value = p.new_monthly_manwon;
-  if (p.area_m2) $("#area").value = p.area_m2;
+  const a = R.areaM2(p.area_m2);            // 계약 밖이면 null — 칸을 건드리지 않는다
+  if (a != null) $("#area").value = a;
   S.amountConfirmed = false;   // 금액이 바뀌었으니 자릿수 확인을 다시 받는다
   save();
 }
@@ -804,8 +805,12 @@ const readLine = (p, where) =>
   // 확인 줄에 없었다. 값이 없으면 "—" 로 적어 "안 건드린다"는 사실도 보이게 한다.
   `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
   + `, 제시 월세 <b>${p.new_monthly_manwon == null ? "—(그대로 둡니다)" : R.fmtMoney(p.new_monthly_manwon)}</b>`
-  + `, 전용면적 <b>${p.area_m2 == null ? "—(그대로 둡니다)" : `${p.area_m2}㎡`}</b>`
-  + `. ${where}`
+  // 면적만 모델이 준 값이 그대로 들어오던 자리였다. fmtArea 는 계약을 통과한 숫자만
+  // 문자열로 만들고 그 밖에는 null 을 낸다 — 마크업이 여기로 들어올 경로가 없다.
+  + `, 전용면적 <b>${R.fmtArea(p.area_m2) ?? "—(그대로 둡니다)"}</b>`
+  // 확인 지점의 안내는 한 구절만 둔다. 고지를 늘리면 읽히지 않는다 — 여기가 사용자가
+  // 신뢰를 결정하는 자리이므로 "무엇과 대조하라"만 적는다.
+  + `. ${where} <strong>받은 문장·계약서와 대조해 주세요.</strong>`
   + `<span class="rowbtns"><button type="button" class="btn primary" id="parse-ok">맞습니다, 이 값으로</button>`
   + `<button type="button" class="btn ghost" id="parse-no">직접 넣겠습니다</button></span>`;
 

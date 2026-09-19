@@ -2,9 +2,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { hasDigits, hasForbidden, rangeCheck, allowedOrigin, gate, json } from "../functions/api/_llm.js";
+import { hasDigits, hasForbidden, rangeCheck, areaM2, allowedOrigin, gate, json, readBody, MAX_BODY } from "../functions/api/_llm.js";
+import { onRequestPost as parsePost } from "../functions/api/parse.js";
 
-let n = 0; const t = (name, fn) => { fn(); n++; };
+/* 검사를 **순차로** 돌린다. 비동기 검사가 globalThis.fetch 를 바꾸므로 동시에 돌면 서로 덮는다
+ * (실측: 세 검사가 겹쳐 힌트 검사가 남의 스텁을 받았다). 실패는 검사 이름과 함께 던진다. */
+/* 검사 요청마다 다른 cf-connecting-ip 를 준다. 같은 키를 쓰면 **제품의 속도 제한**(분당 10회)에
+ * 검사가 걸려서 뒤쪽 검사가 조용히 E_GATE 를 받는다(실측으로 한 번 당했다). */
+let ip = 0;
+let n = 0; let chain = Promise.resolve();
+const t = (name, fn) => { n++; chain = chain.then(async () => {
+  try { await fn(); } catch (e) { throw new Error(`${name}: ${e.message}`); } }); };
 
 const FACTS = {
   asof: "2026-09-18", deadline: "2026-10-20", d_day: 32,
@@ -152,8 +160,151 @@ t("숫자 검사가 무엇을 통과시키는지 — 천장을 적어 둔다", (
   // draft 모델은 숫자도 판정 딕셔너리도 받지 않으므로(draft.js), 통과한 수량 표현은 전부 지어낸 것이다.
 });
 
+t("면적 계약 — 숫자가 아니면 받지 않는다", () => {
+  // 실측 결함(F-12): 이 검사가 없어서 모델이 돌려준 값이 형·범위 검사 없이
+  // 확인 줄의 innerHTML 과 판정 입력 후보로 갔다.
+  for (const v of [10, 59.94, 84.9, 300]) assert.equal(areaM2(v), v, `정상 면적을 버린다: ${v}`);
+  for (const v of [null, undefined, 0, 9.99, 300.01, -50, NaN, Infinity,
+                   "84.9", "<img src=x onerror=BAD>", true, false, [84.9], { v: 84.9 }])
+    assert.equal(areaM2(v), null, `계약 밖인데 통과한다: ${JSON.stringify(v)}`);
+  // 숫자 문자열도 계약 위반이다. 스키마가 number 라고 선언했고, 관대한 강제 변환은 형 검사가 아니다.
+});
+
+t("parse 응답의 면적은 계약을 지난 값만 나간다 — 실제 핸들러", async () => {
+  // 실제 onRequestPost 를 부른다. 네트워크·키 0: 전송만 합성 응답으로 바꾼다.
+  const REQ = ["sgg_nm","umd_nm","bldg_nm","area_m2","rent_type","cur_deposit_manwon",
+    "cur_monthly_manwon","new_deposit_manwon","new_monthly_manwon","rr_right_used_before","confidence","missing"];
+  const ORIGIN = "https://gaengsin-baseline.pages.dev";
+  const real = globalThis.fetch;
+  const ask = async (area) => {
+    const out = Object.fromEntries(REQ.map((k) => [k, null]));
+    Object.assign(out, { cur_deposit_manwon: 35000, new_deposit_manwon: 38000,
+      new_monthly_manwon: 0, confidence: 0.95, missing: [], area_m2: area });
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(out) } }] }), { status: 200 });
+    const request = new Request(`${ORIGIN}/api/parse`, { method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+      body: JSON.stringify({ text: "전세 3억5천인데 3억8천으로 올려달라고 하시네요" }) });
+    return (await parsePost({ request, env: { OPENAI_API_KEY: "sk-dummy" } })).json();
+  };
+  try {
+    const ok = await ask(84.9);
+    assert.equal(ok.parsed.area_m2, 84.9, "정상 면적을 버린다");
+    assert.ok(!ok.warnings.includes("area_m2"), "정상인데 버렸다고 적는다");
+    for (const bad of ["<img src=x onerror=BAD>", "84.9", 3000, true, { a: 1 }]) {
+      const r = await ask(bad);
+      assert.equal(r.ok, true, "면적 하나 때문에 맞는 금액까지 버린다");
+      assert.equal(r.parsed.area_m2, null, `계약 밖 면적이 그대로 나간다: ${JSON.stringify(bad)}`);
+      assert.equal(r.parsed.new_deposit_manwon, 38000, "금액이 함께 망가졌다");
+      assert.ok(r.warnings.includes("area_m2"), "버린 사실을 조용히 숨긴다");
+    }
+    const none = await ask(null);
+    assert.equal(none.parsed.area_m2, null);
+    assert.ok(!none.warnings.includes("area_m2"), "원래 null 인 것을 버렸다고 적는다");
+  } finally { globalThis.fetch = real; }
+});
+
+t("본문 상한은 문자 수가 아니라 바이트로 센다", async () => {
+  // 실측 결함: 예전 구현은 raw.length(UTF-16 코드 단위)를 셌다. 한글 16,000자는 length 16,000
+  // 이지만 48,000 바이트다 — 적어 둔 16KB 의 3배가 통과했다.
+  const enc = new TextEncoder();
+  const mk = (body, headers = {}) => new Request("https://x/api/parse",
+    { method: "POST", headers: { "content-type": "application/json", ...headers }, body });
+  const pad = (bytes, ch) => {
+    const shell = enc.encode(JSON.stringify({ text: "" })).byteLength;
+    return JSON.stringify({ text: ch.repeat(Math.max(0, Math.floor((bytes - shell) / enc.encode(ch).byteLength))) });
+  };
+  const at = pad(MAX_BODY, "a");
+  assert.equal(enc.encode(at).byteLength, MAX_BODY, "경계 본문을 정확히 만들지 못했다");
+  assert.ok(!(await readBody(mk(at))).err, "상한과 같은 크기를 막는다");
+  assert.equal((await readBody(mk(at.replace('"}', 'a"}')))).err, "E_INPUT_INVALID", "상한 + 1바이트를 통과시킨다");
+
+  const ko = pad(MAX_BODY + 600, "전");                       // 문자 수는 적고 바이트는 크다
+  assert.ok(ko.length < MAX_BODY, "이 케이스는 문자 수로는 상한 아래여야 의미가 있다");
+  for (const h of [{}, { "content-length": "10" }])           // 헤더가 없거나 거짓이어도 같아야 한다
+    assert.equal((await readBody(mk(ko, h))).err, "E_INPUT_INVALID",
+      `바이트 초과를 통과시킨다(headers=${JSON.stringify(h)})`);
+  assert.equal((await readBody(mk("{not json"))).err, "E_INPUT_INVALID");
+});
+
+t("자치구 힌트는 값이 있을 때만 프롬프트에 붙는다", async () => {
+  // 실측 결함(8교시): 미선택 시 옵션 문구 "선택하세요" 가 그대로 힌트로 나갔다.
+  const ORIGIN = "https://gaengsin-baseline.pages.dev";
+  const REQ = ["sgg_nm","umd_nm","bldg_nm","area_m2","rent_type","cur_deposit_manwon",
+    "cur_monthly_manwon","new_deposit_manwon","new_monthly_manwon","rr_right_used_before","confidence","missing"];
+  const real = globalThis.fetch;
+  let sent = null;
+  const ask = async (hint) => {
+    const out = Object.fromEntries(REQ.map((k) => [k, null]));
+    Object.assign(out, { cur_deposit_manwon: 35000, new_deposit_manwon: 38000, confidence: 0.95, missing: [] });
+    globalThis.fetch = async (_u, init) => {
+      sent = JSON.parse(init.body).messages.find((m) => m.role === "user").content;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }), { status: 200 });
+    };
+    const request = new Request(`${ORIGIN}/api/parse`, { method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+      body: JSON.stringify({ text: "전세 3억5천인데 3억8천으로", hint: hint === undefined ? undefined : { sgg_nm: hint } }) });
+    await parsePost({ request, env: { OPENAI_API_KEY: "sk-dummy" } });
+    return sent;
+  };
+  try {
+    assert.equal(await ask("마포구"), "[자치구: 마포구]\n전세 3억5천인데 3억8천으로", "정상 힌트가 붙지 않는다");
+    for (const none of [null, undefined, 123, { a: 1 }, ["마포구"]])
+      assert.equal(await ask(none), "전세 3억5천인데 3억8천으로",
+        `문자열이 아닌 힌트가 프롬프트에 들어간다: ${JSON.stringify(none)}`);
+    const longHint = await ask("가".repeat(50));
+    assert.ok(longHint.startsWith("[자치구: " + "가".repeat(20) + "]"), `힌트 길이 상한이 없다: ${JSON.stringify(longHint.slice(0, 60))}`);
+    // 화면 쪽 — 미선택·서울밖에서는 힌트를 아예 만들지 않는다(원문으로 확인).
+    const app = readFileSync(new URL("../dist/assets/app.js", import.meta.url), "utf8");
+    const line = app.match(/hint:\s*\{[^}]*\}/);
+    assert.ok(line && /\$\("#gu"\)\.value\s*&&/.test(line[0]) && /!==\s*"OUT"/.test(line[0]),
+      `화면이 미선택·서울밖을 거르지 않는다: ${line && line[0]}`);
+  } finally { globalThis.fetch = real; }
+  // 주의: 이것은 **프롬프트 구성**의 결정론 검사다. 힌트가 모델 정확도에 주는 영향은
+  // 골든셋의 hint 가 전부 null 이라 여전히 측정되지 않았다(05-TEST §10-4).
+});
+
+t("업스트림이 죽으면 수동 입력으로 내려간다 — 판정은 그대로다", async () => {
+  const ORIGIN = "https://gaengsin-baseline.pages.dev";
+  const real = globalThis.fetch;
+  const ask = async (f) => {
+    globalThis.fetch = f;
+    const request = new Request(`${ORIGIN}/api/parse`, { method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+      body: JSON.stringify({ text: "전세 3억5천인데 3억8천으로" }) });
+    return (await parsePost({ request, env: { OPENAI_API_KEY: "sk-dummy" } })).json();
+  };
+  try {
+    for (const [what, f] of [
+      ["전송 실패", async () => { throw new Error("network"); }],
+      ["상류 500", async () => new Response("", { status: 500 })],
+      ["본문이 JSON 이 아님", async () => new Response(JSON.stringify({ choices: [{ message: { content: "not json" } }] }), { status: 200 })],
+    ]) {
+      const r = await ask(f);
+      assert.equal(r.ok, false, `${what}: 실패를 성공으로 낸다`);
+      assert.equal(r.code, "E_UPSTREAM", `${what}: 오류 코드가 다르다`);
+      assert.equal(r.retryable, true, `${what}: 재시도 가능 표시가 없다`);
+      assert.ok(r.parsed && r.parsed.new_deposit_manwon === null, `${what}: 빈 후보를 주지 않는다`);
+      assert.ok(!JSON.stringify(r).includes("network") && !JSON.stringify(r).includes("500"),
+        `${what}: 업스트림 내용이 응답에 샌다`);
+    }
+    // 키가 아예 없을 때도 같은 자리로 내려간다(제공자 차단의 로컬 대응 경로).
+    const nokey = await (async () => {
+      globalThis.fetch = async () => { throw new Error("불려서는 안 된다"); };
+      const request = new Request(`${ORIGIN}/api/parse`, { method: "POST",
+        headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+        body: JSON.stringify({ text: "전세 3억5천인데 3억8천으로" }) });
+      return (await parsePost({ request, env: {} })).json();
+    })();
+    assert.equal(nokey.code, "E_UPSTREAM", "키가 없을 때 다른 경로로 샌다");
+  } finally { globalThis.fetch = real; }
+  // 이 검사가 보증하는 것은 **애플리케이션 폴백**뿐이다. 제공자 쪽 차단·호스팅 반영·복구는
+  // 여기서 확인되지 않는다(07-FINAL-REVIEW U-05).
+});
+
 /* 문서가 이 건수를 적고 있다. test_rules.mjs 와 같은 이유로 묶어 둔다.
  * **모든 t() 뒤에 두어야 한다** — 중간에 두면 그 시점의 건수만 세고 뒤에 붙은 검사를 놓친다. */
+await chain;   // 비동기 검사의 실패가 조용히 사라지지 않게 한다
 const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
 assert.ok(testDoc.includes(`오리진 경계 ${n}건`),
   `docs/05-TEST.md 가 검증층 건수를 ${n}건으로 적고 있지 않다`);

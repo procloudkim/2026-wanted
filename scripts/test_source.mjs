@@ -8,7 +8,9 @@
  * 진짜 정적 분석이 필요해지면 그때 도구를 들인다.
  */
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, cpSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -103,6 +105,64 @@ for (const f of SRC.filter((x) => x.endsWith(".css"))) {
   n++;
 }
 /* CSP 도 같은 말을 해야 한다 */
+/* ── 제3자 글꼴 고지가 배포물에 들어 있다 ─────────────────────────────────────
+ * SIL OFL 1.1 은 글꼴을 재배포할 때 **라이선스 전문과 저작권 표시가 함께 가도록** 요구한다.
+ * README 한 줄이나 COPYRIGHT.md 만으로는 충족되지 않는다 — 실제로 서버가 내보내는 자리에 있어야 한다.
+ * 출처: google/fonts `ofl/atkinsonhyperlegible/OFL.txt`, 고정 리비전 1b22086d13bdbbf5ec63d01a39a49246e4ac355f
+ * (받은 시각 2026-09-19, 4,352바이트). 07-FINAL-REVIEW F-13. */
+/* 지문은 scripts/font-notice.json 에 둔다 — 소스에 긴 16진 문자열을 넣으면
+ * 위의 "키일 수 있다" 규칙이 걸린다. 그 규칙을 약화시키지 않는 쪽을 골랐다. */
+const NOTICE = JSON.parse(read("scripts/font-notice.json"));
+const OFL_SHA256 = NOTICE.notice.sha256;
+const FONT_SHA = NOTICE.fonts;
+
+/** 글꼴 디렉터리 하나를 검사한다. 음성 대조를 위해 임의 경로를 받는다. */
+export function checkFontNotice(dir) {
+  const notice = join(dir, "OFL.txt");
+  assert.ok(existsSync(notice), `글꼴과 같은 자리에 OFL.txt 가 없다: ${notice}`);
+  const raw = readFileSync(notice);
+  const text = raw.toString("utf8");
+  assert.equal(createHash("sha256").update(raw).digest("hex"), OFL_SHA256,
+    "OFL.txt 가 상류 원문과 다르다 — 전문은 그대로여야 한다(번역·요약·재작성 금지)");
+  assert.ok(text.startsWith(NOTICE.notice.copyright_first_line),
+    "저작권 표시 줄이 첫 줄에 없다");
+  assert.ok(text.includes(NOTICE.notice.license_header),
+    "라이선스 본문 표제가 없다");
+  assert.ok(!/^\s*<(!doctype|html)/i.test(text), "HTML 문서가 OFL.txt 자리에 들어갔다");
+  // 글꼴 파일이 하나도 바뀌지 않았다 — 고지는 이 파일들에 대한 것이다
+  for (const [f, want] of Object.entries(FONT_SHA)) {
+    const p = join(dir, f);
+    assert.ok(existsSync(p), `글꼴 파일이 없다: ${f}`);
+    assert.equal(createHash("sha256").update(readFileSync(p)).digest("hex"), want,
+      `글꼴 파일이 바뀌었다: ${f} — 바뀌었으면 어느 고지가 맞는지 다시 확인한다`);
+  }
+}
+
+{
+  /* 배포물의 글꼴 옆에 OFL 전문과 저작권 표시가 있다 */
+  const dir = join(ROOT, "dist/assets/fonts");
+  checkFontNotice(dir);
+
+  // CSS 가 참조하는 글꼴이 전부 이 디렉터리 안에 있다
+  const css = read("dist/assets/app.css");
+  const refs = [...css.matchAll(/url\("(fonts\/[^"]+)"\)/g)].map((m) => m[1]);
+  assert.ok(refs.length > 0, "CSS 에서 글꼴 참조를 찾지 못했다");
+  for (const r of new Set(refs))
+    assert.ok(existsSync(join(ROOT, "dist/assets", r)), `CSS 가 없는 글꼴을 참조한다: ${r}`);
+
+  // 음성 대조 — 고지를 뺀 임시 사본에서는 이 검사가 반드시 깨진다.
+  // 실제 작업 트리는 건드리지 않는다.
+  const tmp = mkdtempSync(join(tmpdir(), "font-notice-"));
+  try {
+    cpSync(dir, tmp, { recursive: true });
+    rmSync(join(tmp, "OFL.txt"));
+    let threw = false;
+    try { checkFontNotice(tmp); } catch { threw = true; }
+    assert.ok(threw, "고지를 빼도 검사가 통과한다 — 이 검사는 아무것도 지키지 못한다");
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+  n += 2;   // ① 배포물의 고지·글꼴 지문 ② 고지를 빼면 깨지는지(음성 대조)
+}
+
 const headers = read("dist/_headers");
 assert.match(headers, /style-src 'self';/, "_headers CSP 의 style-src 에 외부 오리진이 남아 있다");
 assert.match(headers, /font-src 'self';/, "_headers CSP 의 font-src 에 외부 오리진이 남아 있다");

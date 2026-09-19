@@ -3,7 +3,7 @@
  * 이 함수는 판정하지 않는다. 응답 스키마에 백분위·인상률·판정이 들어갈 자리가 없다.
  * 출력은 조회 키와 사용자 입력값으로만 쓰이고, 판정은 브라우저가 집계 자산으로 한다.
  */
-import { json, fail, readBody, gate, preflight, callOpenAI, rangeCheck, emit } from "./_llm.js";
+import { json, fail, readBody, gate, preflight, callOpenAI, rangeCheck, areaM2, emit } from "./_llm.js";
 
 const SYSTEM = `너는 한국 전월세 계약 문장에서 값을 뽑아내는 추출기다. 판정하지 않는다.
 
@@ -78,12 +78,24 @@ export async function onRequestPost({ request, env }) {
     return done("E_UPSTREAM", fail("E_UPSTREAM", "문장을 자동으로 읽지 못했습니다. 직접 넣어 주세요.", true, { parsed: EMPTY }, origin));
   }
 
-  // 방어선 2 — 자릿수 사고 탐지. confidence 는 통과 근거로 쓰지 않는다.
+  // 방어선 2 — 면적 형·범위 계약. 금액과 달리 응답 전체를 버리지 않는다.
+  // 면적은 사용자가 직접 넣을 수 있는 보조 값이고, 하나 때문에 맞는 금액까지 수동 입력으로
+  // 보내면 손해가 더 크다. 대신 **지어내지 않는다** — 계약 밖이면 null 로 내려 "그대로 둡니다"가
+  // 되고, 무엇을 버렸는지 missing 에 남긴다(조용히 0이 되지 않는다).
+  if (parsed.area_m2 != null && areaM2(parsed.area_m2) == null) {
+    // 모델이 missing 에 이미 적어 두고 값도 함께 보내는 경우가 있다 — 중복을 만들지 않는다.
+    parsed.missing = [...new Set([...(Array.isArray(parsed.missing) ? parsed.missing : []), "area_m2"])];
+    parsed.area_m2 = null;
+  } else {
+    parsed.area_m2 = areaM2(parsed.area_m2);
+  }
+
+  // 방어선 3 — 자릿수 사고 탐지. confidence 는 통과 근거로 쓰지 않는다.
   const range = rangeCheck(parsed);
   if (range)
     return done(range, fail(range, "읽어 낸 금액이 범위를 벗어납니다. 값을 직접 확인해 주세요.", false, { parsed }, origin));
 
-  // 방어선 3 — 신뢰도 게이트. 탈락시킬 때만 쓴다.
+  // 방어선 4 — 신뢰도 게이트. 탈락시킬 때만 쓴다.
   if (!(parsed.confidence >= 0.7) || parsed.new_deposit_manwon == null)
     return done("E_PARSE_LOW_CONFIDENCE", fail("E_PARSE_LOW_CONFIDENCE", "일부 조건을 읽지 못했습니다. 아래에 직접 넣어 주세요.", false, { parsed }, origin));
 

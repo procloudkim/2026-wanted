@@ -41,6 +41,13 @@ export function fmtMoney(manwon) {
   }
   return sign + v.toLocaleString("ko-KR") + "만원";
 }
+/** 면적 계약. `functions/api/_llm.js` 의 areaM2 와 **같은 값이어야 한다**
+ *  — `scripts/test_rules.mjs` 가 두 구현이 어긋나지 않는지 대조한다.
+ *  숫자가 아니면 null 이다. 이 값을 거치지 않은 면적은 화면에도 입력 칸에도 넣지 않는다. */
+export const areaM2 = (v) =>
+  (typeof v === "number" && Number.isFinite(v) && v >= 10 && v <= 300 ? v : null);
+/** 확인 줄에 넣을 면적 문자열. 계약을 통과한 **숫자만** 문자열이 되므로 마크업이 생길 수 없다. */
+export const fmtArea = (v) => { const a = areaM2(v); return a == null ? null : `${a}㎡`; };
 export const fmtPct = (x, d = 2) => (x == null ? "—" : `${halfUp(x, d).toFixed(d)}%`);
 export const fmtN = (n) => (n == null || !isFinite(n) ? "—" : Number(n).toLocaleString("ko-KR"));
 export const fmtDate = (d) => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;

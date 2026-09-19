@@ -6,7 +6,12 @@
  *
  * 한글은 시스템 글꼴로 간다. Noto Sans KR 을 같이 받으면 woff2 128개·CSS 285KB 라
  * 자가 호스팅 비용이 본문 자산 전체보다 커진다. 한글 UI 글꼴은 어느 운영체제에나 있다.
- * Atkinson 을 남기는 이유는 취향이 아니라 저시력 가독성 때문이다(숫자를 읽는 화면이다). */
+ * Atkinson 을 남기는 이유는 취향이 아니라 저시력 가독성 때문이다(숫자를 읽는 화면이다).
+ *
+ * 라이선스: Atkinson Hyperlegible — Copyright 2020 Braille Institute of America, Inc.
+ * SIL Open Font License 1.1. 전문은 이 파일들과 같은 자리에 있다 → fonts/OFL.txt
+ * (상류 google/fonts ofl/atkinsonhyperlegible/OFL.txt, 리비전 1b22086, 받은 날 2026-09-19)
+ * 이 고지는 글꼴에만 적용된다 — 이 저장소의 응용 코드 권리는 COPYRIGHT.md 에 따로 있다. */
 
 /* latin-ext */
 @font-face {
