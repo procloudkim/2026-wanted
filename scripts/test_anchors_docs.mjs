@@ -134,4 +134,32 @@ assert.ok(!read("dist/assets/rules.js").match(/=\s*\{\s*n:\s*\d+,\s*p25:/),
   "rules.js 에 분포 상수가 다시 박혔다. 분포는 anchors 에서 읽는다");
 checks += 2;
 
+
+/* ── 프레임워크 (STYLE §4) ────────────────────────────────────────────────
+ * 릴리스가 장을 추가하면서 Why 를 빼먹는 일이 실제로 있었다 — 커밋 9034472 가 넣은
+ * 02-SPEC §6.0-A 와 04-API §7.0 이 둘 다 무표기였고 둘 다 그 장의 Why 앞에 꽂혔다.
+ * 규칙만으로는 또 일어난다.
+ *
+ * ponytail: 낱말 하나만 본다. "Why 가 있는가"이지 "그 Why 가 이유인가"가 아니다.
+ * 사람이 읽어야 하는 것은 그대로 남는다 — 이 검사는 **빠뜨림**만 잡는다. */
+for (const file of ["docs/01-PRD.md", "docs/02-SPEC.md", "docs/03-ARCHITECTURE.md",
+                    "docs/04-API.md", "docs/05-TEST.md"]) {
+  for (const sec of read(file).split(/^## /m).slice(1)) {
+    const head = sec.split("\n")[0].trim();
+    const body = sec.slice(head.length);
+    assert.ok(/\b(Why|What|How)\b/.test(head) || /\bWhy\b/.test(body)
+              || /<!-- 프레임워크밖:(색인|기록|부재)[^>]*-->/.test(sec),
+      `${file}: "## ${head}" 에 Why 도 프레임워크밖 표시도 없다 (STYLE §4).\n` +
+      `  정하는 장이면 Why 를, 색인·기록·부재 목록이면 표시를 머리에 단다.`);
+    checks++;
+  }
+}
+
+/* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다.
+ * **두 파일 다 본다** — 한쪽만 묶었더니 다른 쪽이 조용히 낡았다(05-TEST 가 source 를 17건으로
+ * 적고 있었다. 실제는 24였고 그 사이 22를 거쳤다). */
+for (const f of ["docs/05-TEST.md", "README.md"])
+  assert.ok(readFileSync(new URL(`../${f}`, import.meta.url), "utf8").includes(`${checks}건`),
+    `${f} 가 앵커·문서 대조 건수를 ${checks}건 으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
+
 console.log(`anchors·문서 대조 ok — ${checks}건`);

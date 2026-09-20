@@ -159,7 +159,7 @@ flowchart LR
 ./scripts/test_all.sh
 ```
 
-2026-09-19 실행 결과 — `전부 통과`, 종료 코드 0.
+2026-09-20 실행 결과 — `전부 통과`, 종료 코드 0.
 
 | 스크립트 | 무엇을 잡는가 | 결과 |
 |---|---|---|
@@ -167,8 +167,8 @@ flowchart LR
 | `test_rules.mjs` | 판정 산술 7종 + 규칙 파서 + 평가셋 라우팅 동결 + **면적 계약** | ok — 32건 |
 | `test_verify.mjs` | LLM 출력 검증층, 오리진 경계, 프롬프트·스키마 해시 동결, **면적 계약·본문 바이트 상한·힌트 구성·업스트림 폴백** | ok — 13건 |
 | `test_contrast.mjs` | 색 대비. 다크모드는 스크린샷으로 안 잡혀 수치로 본다 | ok — 36쌍 |
-| `test_anchors_docs.mjs` | 스냅샷 ↔ 문서·OG 메타 대조. 자산을 다시 만들면 **문서를 같이 고치기 전에는 통과하지 않는다** | ok — 659건 |
-| `test_source.mjs` | 소스 금지 패턴(eval·비밀값·로그 경계), 배포 자산이 전부 우리 것인지, **제3자 글꼴 고지 포장** | ok — 24건 |
+| `test_anchors_docs.mjs` | 스냅샷 ↔ 문서·OG 메타 대조 + **정본 다섯 문서의 Why→What→How 프레임워크**. 자산을 다시 만들면 **문서를 같이 고치기 전에는 통과하지 않는다** | ok — 716건 |
+| `test_source.mjs` | 소스 금지 패턴(eval·비밀값·로그 경계), **HTML·CSS 가 외부 오리진 자산을 참조하지 않는지**, 제3자 글꼴 고지 포장 | ok — 24건 |
 
 **검사 통과는 "결함이 없다"가 아니라 "이 검사가 보는 범위에서 회귀가 없다"는 뜻이다.** 없는 것은 [docs/05-TEST.md §8](docs/05-TEST.md)에 그대로 적혀 있다.
 
@@ -254,7 +254,7 @@ npx wrangler pages dev dist                  # 로컬 실행 (함수 포함)
 
 수집분은 `data/raw-rows.json.gz` 에 남는다(커밋하지 않는다). 집계 스키마를 고칠 때 1,200회를 다시 부르지 않기 위한 캐시다.
 
-배포 환경변수는 호스팅 대시보드에서 넣는다 — `OPENAI_API_KEY`(필수), `OPENAI_MODEL`(선택, 기본 `gpt-5.4-mini`). **원천 API 키는 배포 환경에 넣지 않는다** — 런타임이 원천을 호출하지 않으므로 필요 없다.
+배포 환경변수는 호스팅 대시보드에서 넣는다 — `OPENAI_API_KEY`(필수), `OPENAI_MODEL`(시크릿으로 설정돼 있다. 비워도 코드 기본값이 같은 `gpt-5.4-mini` 라 평가되지 않은 모델로 내려가지 않는다 — `functions/api/_llm.js`). **원천 API 키는 배포 환경에 넣지 않는다** — 런타임이 원천을 호출하지 않으므로 필요 없다.
 
 ---
 
@@ -330,7 +330,7 @@ npx wrangler pages dev dist                  # 로컬 실행 (함수 포함)
 
 두 출처는 같은 신고 원장에서 나오므로 독립 검증이 아니라 보완 관계로 쓴다. 본문 숫자는 국토부 계열 하나에서만 온다.
 
-글꼴 — [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/) (SIL Open Font License 1.1), 자가 호스팅. **라이선스 전문이 아직 배포물에 동봉돼 있지 않다** — 미충족 항목으로 [COPYRIGHT.md](COPYRIGHT.md) §3 과 [F-13](docs/07-FINAL-REVIEW.md)에 적어 두었다.
+글꼴 — [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/), Copyright 2020 Braille Institute of America, Inc. SIL Open Font License 1.1, 자가 호스팅. **라이선스 전문을 글꼴과 같은 자리에 함께 배포한다** — `dist/assets/fonts/OFL.txt`(4,352B). 출처와 검사 방법은 [COPYRIGHT.md](COPYRIGHT.md) §3.
 
 ## 이 저장소의 권리
 

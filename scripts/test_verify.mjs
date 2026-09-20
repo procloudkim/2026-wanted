@@ -143,6 +143,28 @@ t("모델 평가의 전제(프롬프트·검증층 상수)가 동결값과 같�
   assert.equal(required.length, 12);
   assert.equal(sha(required.join("|")), "e1f67371ab30be6d", "parse 의 응답 스키마가 바뀌었다");
 
+  /* 스키마의 정본 문서는 04-API §7.2 다(00-INDEX §0). 코드가 바뀌면 그 문서도 같이 바뀌어야 한다.
+   * 해시 동결만으로는 "코드가 바뀌었다"만 알고 "문서가 따라왔는가"는 아무도 안 봤다. */
+  const apiDoc = readFileSync(new URL("../docs/04-API.md", import.meta.url), "utf8");
+  for (const k of required)
+    assert.ok(apiDoc.includes(k),
+      `docs/04-API.md 에 응답 필드 ${k} 가 없다 — 스키마를 고쳤으면 정본 문서도 고친다`);
+
+  /* 죽은 초안 필드가 문서에 되살아나지 않는다. 2026-09-20 까지 02-SPEC §6.1-1 이
+   * 배포본과 무관한 스키마 사본을 들고 있었다(F: B-12). rate_pct 는 판정 산술의
+   * 정당한 필드명이라 목록에 넣지 않는다 — 넣었으면 첫날부터 깨졌다. */
+  const DEAD = ["quote_spans", "unit_guess", "has_amount", "mentions_monthly_rent",
+                "landlord_claims_residence", "mentions_deadline"];
+  /* **json 코드펜스 안만 본다.** 산문에서 "이 필드는 폐기됐다"고 적는 것은 기록이지 사본이 아니다 —
+   * 그것까지 막으면 왜 지웠는지를 적을 수 없다. 스키마로 되살아나는 것만 잡는다. */
+  for (const f of ["docs/02-SPEC.md", "docs/04-API.md", "README.md"]) {
+    const t = readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
+    for (const fence of t.match(/```json[\s\S]*?```/g) ?? [])
+      for (const d of DEAD)
+        assert.ok(!fence.includes(d),
+          `${f} 의 json 블록에 폐기된 초안 필드 ${d} 가 다시 들어왔다 — 정본은 04-API §7.2 다`);
+  }
+
   const forbidden = [...strip(llmSrc.match(/const FORBIDDEN = \[(.*?)\];/s)[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.equal(forbidden.length, 20);
   assert.equal(sha(forbidden.join("|")), "0fc847fc8ccd9879", "금칙어 목록이 바뀌었다");
@@ -305,8 +327,8 @@ t("업스트림이 죽으면 수동 입력으로 내려간다 — 판정은 그�
 /* 문서가 이 건수를 적고 있다. test_rules.mjs 와 같은 이유로 묶어 둔다.
  * **모든 t() 뒤에 두어야 한다** — 중간에 두면 그 시점의 건수만 세고 뒤에 붙은 검사를 놓친다. */
 await chain;   // 비동기 검사의 실패가 조용히 사라지지 않게 한다
-const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
-assert.ok(testDoc.includes(`오리진 경계 ${n}건`),
-  `docs/05-TEST.md 가 검증층 건수를 ${n}건으로 적고 있지 않다`);
+for (const f of ["docs/05-TEST.md", "README.md"])
+  assert.ok(readFileSync(new URL(`../${f}`, import.meta.url), "utf8").includes(`${n}건`),
+    `${f} 가 검증층 건수를 ${n}건으로 적고 있지 않다`);
 
 console.log(`verify ok — ${n}건`);

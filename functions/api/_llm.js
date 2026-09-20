@@ -175,7 +175,11 @@ export async function callOpenAI(env, payload, timeoutMs) {
   const r = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ model: env.OPENAI_MODEL || "gpt-4o-mini", ...payload }),
+    /* 기본값은 **평가로 채택한 모델**이어야 한다(04-API §5.9). 예전 기본값 gpt-4o-mini 는
+     * 골든셋 6종 비교에 들어간 적이 없어, 시크릿이 지워지면 평가되지 않은 모델로 조용히
+     * 바뀌었다 — 화면에도 로그에도 신호가 남지 않는다. Pages 시크릿이 기존 배포에 어떻게
+     * 전파되는지가 문서화돼 있지 않으므로 가정에 기대 둘 자리가 아니다. */
+    body: JSON.stringify({ model: env.OPENAI_MODEL || "gpt-5.4-mini", ...payload }),
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!r.ok) throw new Error(`upstream ${r.status}`);   // 본문은 읽지 않는다. 로그에 남기지 않는다

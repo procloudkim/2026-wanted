@@ -422,8 +422,8 @@ t("확인 줄의 면적 칸에 마크업이 들어갈 수 없다", () => {
 });
 
 /* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다. */
-const testDoc = readFileSync(new URL("../docs/05-TEST.md", import.meta.url), "utf8");
-assert.ok(testDoc.includes(`${n}건`),
-  `docs/05-TEST.md 가 검사 건수를 ${n}건으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
+for (const f of ["docs/05-TEST.md", "README.md"])
+  assert.ok(readFileSync(new URL(`../${f}`, import.meta.url), "utf8").includes(`${n}건`),
+    `${f} 가 판정 산술 건수를 ${n}건으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
 
 console.log(`rules ok — ${n}건`);

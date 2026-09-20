@@ -57,4 +57,12 @@ for (const k of ["bg", "fg", "card", "card-fg", "muted", "muted-fg", "border", "
 /* body 에 명시적 배경이 있어야 한다 — 없으면 다크모드에서 흰 바탕에 흰 글자가 된다 */
 assert.match(css, /body\s*\{[^}]*background:\s*var\(--bg\)/);
 
+
+/* 문서가 이 건수를 적고 있다. 스스로 낡는 숫자는 검사로 묶거나 문서에서 뺀다.
+ * **두 파일 다 본다** — 한쪽만 묶었더니 다른 쪽이 조용히 낡았다(05-TEST 가 source 를 17건으로
+ * 적고 있었다. 실제는 24였고 그 사이 22를 거쳤다). */
+for (const f of ["docs/05-TEST.md", "README.md"])
+  assert.ok(readFileSync(new URL(`../${f}`, import.meta.url), "utf8").includes(`${n}쌍`),
+    `${f} 가 색 대비 건수를 ${n}쌍 으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
+
 console.log(`contrast ok — ${n}쌍 (light/dark 각 ${PAIRS.length}쌍)`);
