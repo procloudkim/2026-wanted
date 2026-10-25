@@ -559,7 +559,7 @@ async function makeDraft() {
 async function share() {
   const a = S.anchors;
   const text = a
-    ? `전월세 갱신, 같은 법인데 결과가 갈립니다. 갱신요구권 행사 기록이 있는 갱신 ${R.fmtN(a.recorded.n)}건 중 5% 초과는 ${R.fmtPct(a.recorded.over5)}, 기록이 없는 ${R.fmtN(a.unrecorded.n)}건은 ${R.fmtPct(a.unrecorded.over5)}입니다. (${a.scope}, 기준일 ${a.asof})`
+    ? `전월세 갱신 인상률 — 갱신요구권 행사 기록이 있는 갱신 ${R.fmtN(a.recorded.n)}건 중 5% 초과는 ${R.fmtPct(a.recorded.over5)}, 기록이 없는 ${R.fmtN(a.unrecorded.n)}건은 ${R.fmtPct(a.unrecorded.over5)}입니다. 내 조건이 실제 갱신 계약들 사이에서 어디쯤인지 확인해 보세요. (${a.scope}, 기준일 ${a.asof})`
     : "전월세 갱신 조건이 실제 갱신 계약들 사이에서 어디쯤인지 확인하세요.";
   const url = location.origin + "/";
   try {
