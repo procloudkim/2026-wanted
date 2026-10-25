@@ -1,6 +1,6 @@
 /* 갱신 기준선 — 화면. 판정 산술은 rules.js 가 하고 여기서는 읽고 그린다.
  * 판정 경로에 네트워크가 없다. 정적 자산을 받은 뒤로는 전부 브라우저 안에서 끝난다. */
-import * as R from "./rules.js?v=2";
+import * as R from "./rules.js?v=3";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -201,7 +201,7 @@ function decide(i) {
   if (i.kind === "단독다가구") v.flags.push("M-05");
 
   const key = { kind: i.kind, sgg: i.gu, umd: i.umd, seq: i.seq, area: i.area };
-  const wr = R.widen(S.shard.cohorts, key, R.MIN_N_RATE, (r) => R.ratesOf(r).length);
+  const wr = R.widen(S.shard.cohorts, key, R.MIN_N_RATE, R.rateN);   // 표본은 행사 기록이 없는 갱신(R3)
   v.trail = wr.trail;
   if (!wr.rec) { v.mode = wr.trail.every((t) => t.n === 0) ? "M-08" : "M-09"; return finish(v); }
 
@@ -298,7 +298,7 @@ function renderTimeline(v) {
   $("#s2").hidden = false;
   const rows = [
     [w.start, "갱신 요구 기간이 열립니다", "만기 6개월 전"],
-    [w.deadline, "갱신 요구 마감", "만기 2개월 전 — 이 날짜가 지나면 이번 만기에는 권리를 쓸 수 없습니다"],
+    [w.deadline, "갱신 요구 마감", "이 날까지 임대인에게 <b>도달</b>해야 합니다(만기 2개월 전 대응일의 전날). 내용증명은 도달까지 며칠 걸리니 여유를 두세요"],
     [i.expiry, "계약 만기", ""],
   ];
   const tl = el("ul", "tl");
@@ -319,7 +319,9 @@ function renderTimeline(v) {
     : `<div class="dl${w.d_day <= 14 ? " urgent" : ""}"><span class="dd">${w.d_day === 0 ? "오늘이 마지막입니다" : `D-${w.d_day}`}</span><span>갱신 요구 마감 <b>${R.fmtDate(w.deadline)}</b>${w.d_day === 0 ? "" : ` — 남은 기간 ${w.d_day}일`}</span></div>`;
 
   const paths = [
-    ["갱신요구권을 행사한다", `마감까지 의사표시가 도달하면 기록이 남습니다. 서울 집계에서 행사 기록이 있는 ${R.fmtN(S.anchors?.recorded.n)}건 중 5% 초과는 ${R.fmtPct(S.anchors?.recorded.over5)}입니다.`],
+    ["갱신요구권을 행사한다", i.used === "예"
+      ? "같은 주택에서 1회 한정입니다. 이미 행사하셨다면 이번 만기에는 다시 쓸 수 없습니다."
+      : `마감까지 의사표시가 도달하면 기록이 남습니다. 서울 집계에서 행사 기록이 있는 ${R.fmtN(S.anchors?.recorded.n)}건 중 5% 초과는 ${R.fmtPct(S.anchors?.recorded.over5)}입니다.`],
     ["합의로 갱신한다", `5% 상한이 적용되지 않습니다. 행사 기록이 없는 ${R.fmtN(S.anchors?.unrecorded.n)}건 중 ${R.fmtPct(S.anchors?.unrecorded.over5)}가 5%를 넘겼습니다.`],
     ["아무것도 하지 않는다", "마감이 지나면 이번 만기에는 권리를 쓸 수 없습니다. 되돌릴 수 없는 유일한 칸입니다."],
   ];
@@ -328,39 +330,45 @@ function renderTimeline(v) {
 
 function renderVerdict(v) {
   const i = v.input, c = v.cohort, head = $("#verdict");
+  const usedUp = i.used === "예";   // O-01 — 이미 행사했다면 이번 갱신에는 5% 상한이 걸리지 않는다
   head.innerHTML = "";
   if (v.rate?.error) { head.innerHTML = `<p class="headline">인상률을 계산할 수 없습니다.</p>`; }
   else if (v.rate) {
     const over = v.rate.is_over_cap;
     head.append(el("p", "headline", c
-      ? `제시받은 <span class="big${over ? " over" : ""}">${R.fmtPct(v.rate.rate_pct)}</span>는 ${esc(cohortLabel(v))}에서 갱신된 <b>${R.fmtN(c.n)}건</b> 중 <b>상위 ${R.fmtPct(c.top_share_pct, 1)}</b>입니다. 이 코호트의 중앙값은 <b>${R.fmtPct(c.median_pct)}</b>입니다.`
+      ? `제시받은 <span class="big${over ? " over" : ""}">${R.fmtPct(v.rate.rate_pct)}</span>는 ${esc(cohortLabel(v))}에서 <b>갱신요구권 행사 기록이 없는 갱신 ${R.fmtN(c.n)}건</b> 중 <b>상위 ${R.fmtPct(c.top_share_pct, 1)}</b>입니다. 이 갱신들의 중앙값은 <b>${R.fmtPct(c.median_pct)}</b>입니다.`
       : `제시받은 인상률은 <span class="big${over ? " over" : ""}">${R.fmtPct(v.rate.rate_pct)}</span>입니다.`));
+    // 비교에서 뺀 쪽을 숨기지 않는다. 섞으면 같은 제시가 훨씬 드물어 보인다(R3).
+    if (c?.recorded)
+      head.append(el("p", "mine", `같은 범위에서 행사 기록이 있는 갱신 ${R.fmtN(c.recorded.n)}건은 <b>${R.fmtPct(c.recorded.within_cap_pct, 1)}</b>가 5% 이하였습니다. 5% 상한이 걸리는 계약이라 위 비교에 넣지 않았습니다.`));
     const f = el("ul", "facts");
     f.innerHTML = `
       <li><span class="k">현재 보증금</span><span class="v">${R.fmtMoney(i.dep)}</span></li>
-      <li><span class="k">제시 보증금</span><span class="v">${R.fmtMoney(i.odep)}</span></li>
-      <li><span class="k">5% 상한이면</span><span class="v">${R.fmtMoney(v.cap.deposit)}</span></li>
-      <li><span class="k">${v.cap.over ? "상한 대비 차액" : "상한 이내"}</span><span class="v ${v.cap.over ? "over" : "ok"}">${v.cap.over ? R.fmtMoney(v.cap.excess) : "초과 없음"}</span></li>`;
+      <li><span class="k">제시 보증금</span><span class="v">${R.fmtMoney(i.odep)}</span></li>`
+      + (usedUp
+        ? `<li><span class="k">5% 상한</span><span class="v">이번 갱신에는 적용되지 않음</span></li>`
+        : `<li><span class="k">5% 상한이면</span><span class="v">${R.fmtMoney(v.cap.deposit)}</span></li>
+      <li><span class="k">${v.cap.over ? "상한 대비 차액" : "상한 이내"}</span><span class="v ${v.cap.over ? "over" : "ok"}">${v.cap.over ? R.fmtMoney(v.cap.excess) : "초과 없음"}</span></li>`);
     head.append(f);
-    if (v.cap.over && S.anchors)
+    if (v.cap.over && S.anchors && !usedUp)
       head.append(el("p", "mine", `서울 집계에서 행사 기록 없는 초과 건의 차액은 건당 중앙값 <b>${R.fmtMoney(S.anchors.excess_median)}</b>입니다.`));
   }
 
   const co = $("#cohort"); co.innerHTML = "";
   if (c) {
     if (c.widened)
-      co.append(el("p", "trail", "표본이 모자라 범위를 넓혔습니다 — " +
+      co.append(el("p", "trail", "행사 기록이 없는 갱신이 모자라 범위를 넓혔습니다 — " +
         v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ") +
         `. <b>이 숫자는 ${R.LEVELS[c.level]} 기준입니다.</b>`));
     co.append(el("ul", "facts", `
       <li><span class="k">표본 수</span><span class="v">${R.fmtN(c.n)}건</span></li>
       <li><span class="k">중앙값</span><span class="v">${R.fmtPct(c.median_pct)}</span></li>
       <li><span class="k">상위 10% 인상률</span><span class="v">${R.fmtPct(c.p90_pct)}</span></li>
-      <li><span class="k">이 코호트의 5% 초과</span><span class="v">${R.fmtN(c.over_cap_n)}건</span></li>`));
+      <li><span class="k">그중 5% 초과</span><span class="v">${R.fmtN(c.over_cap_n)}건</span></li>`));
     if (c.tie_at_cap_n / c.n >= 0.2)
-      co.append(el("p", "tie", `이 코호트의 <b>${R.fmtN(c.n)}건 중 ${R.fmtN(c.tie_at_cap_n)}건이 정확히 +5.00%</b>입니다. 5.00% 부근에서는 백분위가 한 계단씩 크게 움직입니다.`));
+      co.append(el("p", "tie", `이 갱신 <b>${R.fmtN(c.n)}건 중 ${R.fmtN(c.tie_at_cap_n)}건이 정확히 +5.00%</b>입니다. 5.00% 부근에서는 백분위가 한 계단씩 크게 움직입니다.`));
   } else if (v.trail) {
-    co.append(el("p", "trail", "각 단계 건수 — " + v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ")));
+    co.append(el("p", "trail", "행사 기록이 없는 갱신의 단계별 건수 — " + v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ")));
   }
 
   const g = $("#groups"); g.innerHTML = "";
@@ -474,7 +482,7 @@ function renderGates(v) {
 function factsOf(v) {
   const i = v.input;
   return {
-    asof: v.asof, choice: S.choice,
+    asof: v.asof, choice: S.choice, used_up: i.used === "예",
     deadline: isoDate(v.window.deadline), deadline_ko: R.fmtDate(v.window.deadline), d_day: v.window.d_day,
     cur_deposit_manwon: i.dep, new_deposit_manwon: i.odep, monthly_manwon: i.orent,
     rate_pct: v.rate?.rate_pct ?? null,
@@ -494,14 +502,16 @@ function bodyLines(f) {
   const L = [];
   if (f.rate_pct != null) {
     L.push(`제시하신 조건은 현재 보증금 ${R.fmtMoney(f.cur_deposit_manwon)}에서 ${R.fmtMoney(f.new_deposit_manwon)}으로 ${R.fmtPct(f.rate_pct)} 인상입니다.`);
-    L.push(`주택임대차보호법 제7조의 20분의 1 기준을 적용하면 ${R.fmtMoney(f.cap_deposit_manwon)}입니다.`
-      + (f.excess_manwon > 0 ? ` 제시하신 금액과의 차이는 ${R.fmtMoney(f.excess_manwon)}입니다.` : ""));
+    // 이미 행사했다면 이번 갱신에는 제7조의 상한도, 제6조의3 의 요구 기간도 걸리지 않는다(O-01)
+    if (!f.used_up)
+      L.push(`주택임대차보호법 제7조의 20분의 1 기준을 적용하면 ${R.fmtMoney(f.cap_deposit_manwon)}입니다.`
+        + (f.excess_manwon > 0 ? ` 제시하신 금액과의 차이는 ${R.fmtMoney(f.excess_manwon)}입니다.` : ""));
   }
   if (f.cohort)
-    L.push(`국토교통부 전월세 실거래가 공개자료(기준일 ${f.asof})에서 ${f.cohort.label}의 갱신 계약 ${R.fmtN(f.cohort.n)}건을 보면, 인상률 중앙값은 ${R.fmtPct(f.cohort.median_pct)}이고 상위 10%는 ${R.fmtPct(f.cohort.p90_pct)}입니다. 제시하신 조건은 이 가운데 상위 ${R.fmtPct(f.cohort.top_share_pct, 1)}에 해당합니다.`);
+    L.push(`국토교통부 전월세 실거래가 공개자료(기준일 ${f.asof})에서 ${f.cohort.label}의 갱신요구권 행사 기록이 없는 갱신 계약 ${R.fmtN(f.cohort.n)}건을 보면, 인상률 중앙값은 ${R.fmtPct(f.cohort.median_pct)}이고 상위 10%는 ${R.fmtPct(f.cohort.p90_pct)}입니다. 제시하신 조건은 이 가운데 상위 ${R.fmtPct(f.cohort.top_share_pct, 1)}에 해당합니다.`);
   if (f.market)
     L.push(`같은 조건의 신규 전세 보증금 중앙값은 ${R.fmtMoney(f.market.new_median_manwon)}입니다(신규 표본 ${R.fmtN(f.market.n)}건).`);
-  L.push(`주택임대차보호법 제6조의3에 따른 갱신 요구 기간은 ${f.deadline_ko}까지입니다.`);
+  if (!f.used_up) L.push(`주택임대차보호법 제6조의3에 따른 갱신 요구 기간은 ${f.deadline_ko}까지입니다.`);
   return L;
 }
 
@@ -645,7 +655,7 @@ function downloadICS(v) {
     `UID:${stamp(d)}-gaengsin@local`, `DTSTAMP:${stamp(today())}T000000Z`,
     `DTSTART;VALUE=DATE:${stamp(d)}`, `DTEND;VALUE=DATE:${stamp(end)}`,
     "SUMMARY:갱신요구권 행사 마감일",
-    "DESCRIPTION:이 날짜가 지나면 이번 만기에는 갱신요구권을 행사할 수 없습니다.",
+    "DESCRIPTION:이 날까지 임대인에게 도달해야 합니다. 지나면 이번 만기에는 갱신요구권을 행사할 수 없습니다.",
     "BEGIN:VALARM", "TRIGGER:-P7D", "ACTION:DISPLAY", "DESCRIPTION:갱신 요구 마감 7일 전", "END:VALARM",
     "END:VEVENT", "END:VCALENDAR",
   ].join("\r\n");

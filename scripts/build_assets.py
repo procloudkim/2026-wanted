@@ -305,7 +305,8 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
         g = [r for r in renew if r["kind"] == kind]
         by_kind[kind] = {"n": len(g),
                          "rr": summary([r for r in g if r["rr"]]),
-                         "nr": summary([r for r in g if not r["rr"]])}
+                         "nr": summary([r for r in g if not r["rr"]]),
+                         "ladder": ladder(g)}   # 키에 유형이 들어 있어 유형별로 따로 세도 같다
     rr = [r for r in renew if r["rr"]]
     nr = [r for r in renew if not r["rr"]]
     return {
@@ -329,18 +330,21 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
 
 
 def ladder(renew):
-    """갱신 계약이 폴백 사다리의 몇 단계에서 표본 3건을 만나는가(02-SPEC §3.6).
+    """갱신 계약이 폴백 사다리의 몇 단계에서 비교 표본 3건을 만나는가(02-SPEC §3.6).
 
+    비교 표본은 **행사 기록이 없는 갱신**만이다(R3). 화면이 그 건수로 사다리를 타므로 여기서도 같이 센다.
     "표본 3건 이상인 코호트 비율"은 모수를 코호트로 잡느냐 계약으로 잡느냐에 따라 값이 달라진다.
     화면이 답하는 질문은 "내 계약이 어느 단계에서 판정되나"이므로 계약을 모수로 센다."""
     buckets = {}
     for r in renew:
+        if r["rr"]:
+            continue
         for _lv, k in keys_for(r):
             buckets[k] = buckets.get(k, 0) + 1
     hit = {}
     for r in renew:
         for lv, k in keys_for(r):
-            if buckets[k] >= 3:
+            if buckets.get(k, 0) >= 3:
                 hit[lv] = hit.get(lv, 0) + 1
                 break
         else:
@@ -519,8 +523,10 @@ def selftest():
     # 초과 2건(3,000 / 1,000)의 최근접 순위 중앙값은 사사오입으로 위쪽인 3,000이다
     assert anc["excess_median"] == 3000
 
-    # 사다리: 픽스처의 갱신 3건은 전부 1단계에서 표본 3건을 만난다
-    assert anc["ladder"]["1"] == 100.0 and anc["ladder"]["none"] == 0.0
+    # 사다리: 픽스처의 갱신 3건 중 행사 기록 없는 것은 2건뿐이라 어느 단계에서도 표본 3건을 못 만난다.
+    # 행사 기록 있는 1건까지 세면 1단계 100% 가 된다 — 그것이 R3 표본을 정정하기 전의 값이었다.
+    assert anc["ladder"]["1"] == 0.0 and anc["ladder"]["none"] == 100.0
+    assert anc["by_kind"]["아파트"]["ladder"] == anc["ladder"]
     # 환산: 보증금 감액이 없는 월세 갱신(5,000 → 5,000)은 전환이 아니라 순증이라 표본이 아니다
     assert anc["convert"] is None
     conv = convert_dist([{"ctype": "갱신", "prev_rent": None, "prev_deposit": 50000,
@@ -574,6 +580,7 @@ def main(from_cache=False, retry=False):
         with gzip.open(CACHE, "rt", encoding="utf-8") as f:
             c = json.load(f)
         rows, errs, zeros, ymds = c["rows"], c["errs"], c["zeros"], c["ymds"]
+        asof = c["collected"]   # 기준일은 재집계한 날이 아니라 수집한 날이다
         print(f"# 캐시 {len(rows):,}행 (수집일 {c['collected']}), 실패 {len(errs)}")
 
     if retry and errs:

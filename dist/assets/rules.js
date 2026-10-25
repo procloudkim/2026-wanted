@@ -170,8 +170,8 @@ export function keysFor({ kind, sgg, umd, seq, area }) {
   return ks;
 }
 
-/** 병합된 인상률 벡터(0.01%p 단위 정수, 오름차순). */
-export const ratesOf = (rec) => [...(rec.rr || []), ...(rec.nr || [])].sort((a, b) => a - b);
+/** R3 의 표본 수 — 행사 기록이 없는 갱신만 센다. 폴백 사다리도 이 건수로 탄다(r3Percentile 과 한 쌍). */
+export const rateN = (rec) => (rec.nr || []).length;
 
 /**
  * 폴백 사다리. 위 단계부터 내려가며 표본이 minN 이상인 첫 레코드를 쓴다.
@@ -217,7 +217,11 @@ export function r2Cap(prev, now) {
 }
 
 /* ── R3. 코호트 백분위 ─────────────────────────────────────────────────────
- * "상위 X%" 는 나보다 크거나 같은 계약의 비율(동률 포함)이다.
+ * "상위 X%" 는 **행사 기록이 없는 갱신**(rec.nr) 안에서 나보다 크거나 같은 계약의 비율(동률 포함)이다.
+ * 행사 기록이 있는 갱신(rec.rr)은 섞지 않는다. 5% 상한이 걸린 계약이라 섞으면 제시안이 실제보다
+ * 드물어 보인다 — 대치동 전용 80-90㎡ 의 +8% 가 합치면 316건 중 상위 16.8%, 행사 기록 없는 111건
+ * 안에서는 47.7% 였다(2026-10-25 검토). 권리를 쓸 수 있는 사람에게는 상한 5% 가 답이고,
+ * 쓸 수 없는 사람이 견줄 대상은 행사 기록이 없는 쪽이다.
  * 비교는 교차 곱으로 한다 — 벡터가 0.01%p 정수라 부동소수를 섞으면 동률이 깨진다.
  *
  * 5% 초과·동률 건수는 벡터에서 세지 않고 레코드의 ro/no/rt/nt 를 그대로 쓴다.
@@ -225,18 +229,19 @@ export function r2Cap(prev, now) {
  * (실측: 행사 기록 있는 갱신의 초과가 0.37% → 0.01% 로 바뀐다).
  * 빌드가 정수 비교로 센 값을 실어 보내야 R1 의 판정과 코호트가 같은 말을 한다. */
 export function r3Percentile(rec, prev, now) {
-  const vec = ratesOf(rec), n = vec.length;
+  const vec = rec.nr || [], n = rateN(rec);
   if (n < MIN_N_RATE) return { need_widen: true, n };
   const above = vec.filter((r) => r * prev >= (now - prev) * 10000).length;
+  const rr = (rec.rr || []).length;
   return {
     n,
     median_pct: nearestRank(vec, 50) / 100,
     p90_pct: nearestRank(vec, 90) / 100,
     top_share_pct: round1((above / n) * 100),
-    tie_at_cap_n: (rec.rt || 0) + (rec.nt || 0),
-    over_cap_n: (rec.ro || 0) + (rec.no || 0),
-    recorded: rec.rr ? { n: rec.rr.length, over_cap_n: rec.ro || 0 } : null,
-    unrecorded: rec.nr ? { n: rec.nr.length, over_cap_n: rec.no || 0 } : null,
+    tie_at_cap_n: rec.nt || 0,
+    over_cap_n: rec.no || 0,
+    // 비교에서 뺀 쪽. 왜 뺐는지 화면에 적으려고 같은 범위의 건수와 5% 이하 비율만 싣는다.
+    recorded: rr ? { n: rr, within_cap_pct: round1(((rr - (rec.ro || 0)) / rr) * 100) } : null,
   };
 }
 
@@ -284,7 +289,13 @@ export function depositLooksOff(deposit, cohortMedian) {
 }
 
 /* ── R6. 법정 기한 타임라인 ────────────────────────────────────────────────
- * 개월 단위 계산이 정답이고 D-180/D-60 표기는 보조다. 말일은 그 달의 마지막 날로 맞춘다. */
+ * 개월 단위 계산이 정답이고 D-180/D-60 표기는 보조다. 말일은 그 달의 마지막 날로 맞춘다.
+ *
+ * 마감은 대응일이 아니라 **그 전날**이다. "2개월 전까지"는 대응일 0시 전까지라서 대응일 당일에
+ * 도달하면 이미 늦다. 기대값은 바깥 해석에서 가져왔다(확인 2026-10-25, scripts/test_rules.mjs R6):
+ * 서울시 마을변호사 "만료일 9월 30일 → 1개월 전인 8월 29일까지 도달", 국토부 인용 보도
+ * "만기 1월 9일 → 12월 9일 0시 전까지". 판례는 찾지 못했다. 되돌릴 수 없는 기한이라 이른 쪽으로 안내한다.
+ * 예전 구현은 대응일을 마감으로 냈고, 검증 표도 같은 사람이 써서 하루 늦은 마감이 통과했다. */
 export const daysInMonth = (y, m) => new Date(y, m, 0).getDate();   // m 은 1-12
 
 export function minusMonths(d, m) {
@@ -298,11 +309,13 @@ const dayDiff = (a, b) =>
   Math.round((Date.UTC(a.getFullYear(), a.getMonth(), a.getDate()) -
               Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())) / DAY);
 
+const dayBefore = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+
 export function r6Window(expiry, today, signed = null) {
-  const start = minusMonths(expiry, 6);
-  let deadline = minusMonths(expiry, 2), note = null;
+  const start = minusMonths(expiry, 6);           // 창은 대응일 0시에 열린다
+  let deadline = dayBefore(minusMonths(expiry, 2)), note = null;
   if (signed && signed < new Date(2020, 11, 10)) {
-    const alt = minusMonths(expiry, 1);          // 2020-12-10 이전 체결분의 옛 기준
+    const alt = dayBefore(minusMonths(expiry, 1));   // 2020-12-10 이전 체결분의 옛 기준
     note = { alt_deadline: alt, text: "기준이 다를 수 있어 두 날짜를 모두 표시합니다" };
     if (alt < deadline) deadline = alt;           // 보수적으로 이른 날짜를 마감으로 안내한다
   }

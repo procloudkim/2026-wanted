@@ -80,25 +80,41 @@ t("R2 — 초과가 아니면 차액을 0으로 두고 음수를 '여유'로 포
 });
 
 /* ── R3 코호트 백분위 ──────────────────────────────────────────────────────── */
-t("R3 — 상위 X%는 동률을 포함한다", () => {
-  const rec = { rr: [0, 500, 500], nr: [500, 800, 2000], rt: 2, nt: 1, ro: 0, no: 2 };
+t("R3 — 상위 X%는 행사 기록이 없는 갱신 안에서 센다(동률 포함)", () => {
+  const rec = { rr: [0, 500, 500], nr: [300, 500, 800, 2000], rt: 2, nt: 1, ro: 0, no: 2 };
   const r = R.r3Percentile(rec, 10000, 10500);          // 내 인상률 = 정확히 5.00%
-  assert.equal(r.n, 6);
-  // 나보다 크거나 같은 것: 500×3 + 800 + 2000 = 5건 → 83.3%
-  assert.equal(r.top_share_pct, 83.3);
-  assert.equal(r.median_pct, 5.0);
+  assert.equal(r.n, 4);                                 // 행사 기록 있는 3건은 표본이 아니다
+  // 나보다 크거나 같은 것: 500 + 800 + 2000 = 3건 → 75.0% (합쳤다면 5/7 = 71.4%)
+  assert.equal(r.top_share_pct, 75.0);
+  assert.equal(r.median_pct, 8.0);
   assert.equal(r.p90_pct, 20.0);
+  assert.deepEqual(r.recorded, { n: 3, within_cap_pct: 100.0 });
 });
 
 t("R3 — 5% 초과·동률은 벡터가 아니라 레코드의 정수 비교 결과를 쓴다", () => {
-  // 벡터에는 500 이 3건 있지만 그중 1건은 실제로 5.0026% 다(빌드가 정수 비교로 세어 no=1).
-  // 벡터에서 세면 초과 0건이 되어, R1 이 "초과"라고 판정한 계약이 분포에서 사라진다.
-  const rec = { rr: [500, 500], nr: [500, 900], rt: 2, nt: 0, ro: 0, no: 2 };
+  // 벡터에는 500 이 2건 있지만 그중 1건은 실제로 5.0026% 다(빌드가 정수 비교로 세어 no=2).
+  // 벡터에서 세면 초과 1건이 되어, R1 이 "초과"라고 판정한 계약이 분포에서 사라진다.
+  const rec = { rr: [500, 500], nr: [500, 500, 900], rt: 2, nt: 1, ro: 0, no: 2 };
   const r = R.r3Percentile(rec, 10000, 10500);
-  assert.equal(r.tie_at_cap_n, 2);                      // 벡터의 500 은 3건이지만 동률은 2건
+  assert.equal(r.tie_at_cap_n, 1);                      // 벡터의 500 은 2건이지만 동률은 1건
   assert.equal(r.over_cap_n, 2);
-  assert.deepEqual(r.recorded, { n: 2, over_cap_n: 0 });
-  assert.deepEqual(r.unrecorded, { n: 2, over_cap_n: 2 });
+  assert.deepEqual(r.recorded, { n: 2, within_cap_pct: 100.0 });
+});
+
+t("R3 — 데모 코호트: 행사 기록 있는 갱신을 섞으면 제시안이 드물어 보인다", () => {
+  // README 의 데모(강남구 대치동 전용 80-90㎡, 9억 → 9억 7,200만원)와 같은 값이다.
+  // 자산을 다시 만들면 이 숫자와 README 문장을 같이 고친다.
+  const shard = JSON.parse(readFileSync(new URL("../dist/data/cohort/11680.json", import.meta.url), "utf8"));
+  const rec = shard.cohorts["아파트|11680|대치동||80-90"];
+  const r = R.r3Percentile(rec, 90000, 97200);
+  assert.equal(r.n, 111);
+  assert.equal(r.top_share_pct, 47.7);
+  assert.equal(r.median_pct, 7.37);
+  assert.deepEqual(r.recorded, { n: 205, within_cap_pct: 100.0 });
+  // 예전 구현(두 벡터를 합침)은 같은 제시를 316건 중 상위 16.8% 로 냈다
+  const merged = [...rec.rr, ...rec.nr];
+  assert.equal(merged.length, 316);
+  assert.equal(R.round1((merged.filter((x) => x >= 800).length / merged.length) * 100), 16.8);
 });
 
 t("R3 — 정수 비교와 실수 비교는 만원 단위 정수에서는 갈리지 않는다", () => {
@@ -116,9 +132,11 @@ t("R3 — 정수 비교와 실수 비교는 만원 단위 정수에서는 갈리
 });
 
 t("R3 — 표본 3건 미만이면 백분위를 만들지 않는다", () => {
-  const r = R.r3Percentile({ rr: [500], nr: [600] }, 10000, 10500);
+  assert.equal(R.r3Percentile({ rr: [500], nr: [600] }, 10000, 10500).need_widen, true);
+  // 행사 기록 있는 갱신은 표본을 채우지 않는다 — 합쳐서 4건이어도 기록 없는 쪽이 1건이면 넓힌다
+  const r = R.r3Percentile({ rr: [500, 500, 500], nr: [600] }, 10000, 10500);
   assert.equal(r.need_widen, true);
-  assert.equal(r.n, 2);
+  assert.equal(r.n, 1);
 });
 
 /* ── R5 이탈 차액 ──────────────────────────────────────────────────────────── */
@@ -157,11 +175,11 @@ t("R2-1 — 되묻기이지 버리기가 아니다", () => {
 /* ── R6 법정 기한 (02-SPEC §3.7 검증 표 그대로) ────────────────────────────── */
 t("R6 — 개월 계산과 말일 보정", () => {
   const cases = [
-    ["2026-12-20", "2026-06-20", "2026-10-20"],   // D-60 표기(10-21)와 하루 어긋난다
-    ["2027-01-15", "2026-07-15", "2026-11-15"],
-    ["2026-11-30", "2026-05-30", "2026-09-30"],
-    ["2026-12-31", "2026-06-30", "2026-10-31"],   // 6월은 31일이 없다
-    ["2026-04-30", "2025-10-30", "2026-02-28"],   // 2월 말일 보정
+    ["2026-12-20", "2026-06-20", "2026-10-19"],   // 대응일(10-20)의 전날
+    ["2027-01-15", "2026-07-15", "2026-11-14"],
+    ["2026-11-30", "2026-05-30", "2026-09-29"],
+    ["2026-12-31", "2026-06-30", "2026-10-30"],   // 6월은 31일이 없다
+    ["2026-04-30", "2025-10-30", "2026-02-27"],   // 2월 말일(28일)로 보정한 뒤 그 전날
   ];
   for (const [exp, start, dl] of cases) {
     const w = R.r6Window(D(exp), D("2026-09-18"));
@@ -170,21 +188,36 @@ t("R6 — 개월 계산과 말일 보정", () => {
   }
 });
 
+t("R6 — 마감은 대응일의 전날이다 (기대값은 바깥에서 가져온다)", () => {
+  // 예전 표는 코드와 기대값을 같은 사람이 써서 하루 늦은 마감(대응일)이 그대로 통과했다.
+  // 아래 셋은 이 저장소 밖의 해석이다(확인 2026-10-25). 판례는 찾지 못했다.
+  //  서울시 마을변호사: 만료일 2020-09-30 → "1개월 전인 2020년 8월 29일까지" 도달
+  //    https://mediahub.seoul.go.kr/archives/1294440
+  //  국토부 인용 보도: 만기 1월 9일 → "12월 9일 0시 전까지", 곧 12월 8일까지
+  //    https://kyeonggi.com/article/202011301147368
+  //  2개월 기준 해설: 만기 12월 15일 → 10월 14일까지 (bokduckbbang.com)
+  const old = (exp) => R.r6Window(D(exp), D("2020-01-01"), D("2019-01-01")).note.alt_deadline;
+  assert.equal(iso(old("2020-09-30")), "2020-08-29");
+  assert.equal(iso(old("2021-01-09")), "2020-12-08");
+  assert.equal(iso(R.r6Window(D("2026-12-15"), D("2026-09-18")).deadline), "2026-10-14");
+});
+
 t("R6 — 남은 일수와 경고 단계", () => {
   const w = R.r6Window(D("2026-12-20"), D("2026-09-18"));
-  assert.equal(w.d_day, 32);
+  assert.equal(w.d_day, 31);
   assert.equal(w.stage, "OPEN");
-  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-20")).stage, "TODAY");
-  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-19")).stage, "D1");
-  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-17")).stage, "D3");
-  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-21")).stage, "PASSED");
-  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-21")).d_day, -1);
+  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-19")).stage, "TODAY");
+  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-18")).stage, "D1");
+  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-16")).stage, "D3");
+  // 대응일(10-20) 당일은 이미 늦다. 예전 구현은 이날을 "오늘이 마지막입니다"로 냈다.
+  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-20")).stage, "PASSED");
+  assert.equal(R.r6Window(D("2026-12-20"), D("2026-10-20")).d_day, -1);
 });
 
 t("R6 — 2020-12-10 이전 체결분은 이른 날짜를 마감으로 안내한다", () => {
   const w = R.r6Window(D("2026-12-20"), D("2026-09-18"), D("2020-06-01"));
-  assert.equal(iso(w.deadline), "2026-10-20");           // 2개월 기준이 더 이르다
-  assert.equal(iso(w.note.alt_deadline), "2026-11-20");
+  assert.equal(iso(w.deadline), "2026-10-19");           // 2개월 기준이 더 이르다
+  assert.equal(iso(w.note.alt_deadline), "2026-11-19");
   assert.equal(R.r6Window(D("2026-12-20"), D("2026-09-18"), D("2021-01-01")).note, null);
 });
 
@@ -232,23 +265,23 @@ t("폴백 사다리 — 유형별 최상위 단계", () => {
 t("폴백 사다리 — 어느 단계에서 몇 건이 나왔는지 전부 남긴다", () => {
   const key = { kind: "아파트", sgg: "11440", umd: "성산동", seq: "11440-2118", area: 50.6 };
   const cohorts = {
-    "아파트|11440|성산동|11440-2118|50-60": { rr: [500], nr: [600] },       // 2건, 미달
-    "아파트|11440|성산동|11440-2118|": { rr: [500, 500], nr: [600, 700] },  // 4건, 통과
+    "아파트|11440|성산동|11440-2118|50-60": { rr: [500, 500, 500], nr: [600] },  // 기록 없는 1건, 미달
+    "아파트|11440|성산동|11440-2118|": { rr: [500, 500], nr: [600, 700, 800] },  // 3건, 통과
   };
-  const w = R.widen(cohorts, key, 3, (r) => R.ratesOf(r).length);
+  const w = R.widen(cohorts, key, 3, R.rateN);
   assert.equal(w.level, 2);
   assert.equal(w.widened, true);
-  assert.deepEqual(w.trail.map((s) => s.n), [2, 4]);
+  assert.deepEqual(w.trail.map((s) => s.n), [1, 3]);     // 합치면 1단계도 4건이라 넓히지 않았을 것이다
   assert.equal(w.trail[0].label, "단지·면적대");
 
-  const none = R.widen({}, key, 3, (r) => R.ratesOf(r).length);
+  const none = R.widen({}, key, 3, R.rateN);
   assert.equal(none.rec, null);
   assert.equal(none.trail.length, 5);                    // 끝까지 내려가고 판정 불가로 끝낸다
 });
 
-t("인상률 벡터 병합은 정렬을 유지한다", () => {
-  assert.deepEqual(R.ratesOf({ rr: [500, 900], nr: [-100, 700] }), [-100, 500, 700, 900]);
-  assert.deepEqual(R.ratesOf({ rr: null, nr: [500] }), [500]);
+t("R3 표본 수는 행사 기록이 없는 갱신만 센다", () => {
+  assert.equal(R.rateN({ rr: [500, 900], nr: [-100, 700] }), 2);
+  assert.equal(R.rateN({ rr: [500], nr: null }), 0);
 });
 
 /* ── 표시 포맷 (DR6) ───────────────────────────────────────────────────────── */
