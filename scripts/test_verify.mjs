@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { hasDigits, hasForbidden, rangeCheck, areaM2, allowedOrigin, gate, json, readBody, MAX_BODY } from "../functions/api/_llm.js";
 import { onRequestPost as parsePost } from "../functions/api/parse.js";
+import { onRequestPost as draftPost } from "../functions/api/draft.js";
 
 /* 검사를 **순차로** 돌린다. 비동기 검사가 globalThis.fetch 를 바꾸므로 동시에 돌면 서로 덮는다
  * (실측: 세 검사가 겹쳐 힌트 검사가 남의 스텁을 받았다). 실패는 검사 이름과 함께 던진다. */
@@ -23,14 +24,19 @@ const FACTS = {
             unrecorded: { n: 44877, over_cap_share_pct: 31.95, excess_median: 2400 } },
 };
 
-t("오리진 경계 — 우리 페이지 말고는 이 함수를 부를 수 없다", () => {
+t("오리진 경계 — 같은 오리진의 페이지만 이 함수를 부를 수 있다", () => {
   const PROD = "https://gaengsin-baseline.pages.dev/api/draft";
+  const PREVIEW = "https://0000abcd.gaengsin-baseline.pages.dev/api/draft";   // 가짜 배포 해시
   const LOCAL = "http://localhost:8788/api/draft";
   const ok = (o, url = PROD) =>
     allowedOrigin({ url, headers: { get: (k) => (k === "origin" ? o : null) } });
 
   assert.equal(ok("https://gaengsin-baseline.pages.dev"), "https://gaengsin-baseline.pages.dev");
-  assert.equal(ok("https://4a5e40c6.gaengsin-baseline.pages.dev"), "https://4a5e40c6.gaengsin-baseline.pages.dev");
+  assert.equal(ok("https://0000abcd.gaengsin-baseline.pages.dev", PREVIEW), "https://0000abcd.gaengsin-baseline.pages.dev");
+  // 배포끼리도 서로 부르지 못한다. 하위 도메인 전부를 받으면 보안 수정 전의 옛 배포 페이지가
+  // 새 배포의 키를 쓴다(2026-10-25 감사)
+  assert.equal(ok("https://0000abcd.gaengsin-baseline.pages.dev", PROD), null);
+  assert.equal(ok("https://gaengsin-baseline.pages.dev", PREVIEW), null);
 
   // 이 넷을 막지 못하면 남의 사이트가 우리 OpenAI 키를 쓴다
   assert.equal(ok("https://evil.example"), null);
@@ -39,11 +45,11 @@ t("오리진 경계 — 우리 페이지 말고는 이 함수를 부를 수 없�
   assert.equal(ok("http://gaengsin-baseline.pages.dev"), null);        // https 가 아니다
   assert.equal(ok("not a url"), null);
 
-  // 로컬 개발 예외는 **요청 자체가 로컬로 들어올 때만** 열린다.
+  // 로컬 개발도 같은 규칙이다. 같은 기기의 다른 포트 개발 서버 페이지는 진짜 그 오리진을 가지므로 막아야 한다.
   // 실측(2026-09-18): 배포본이 http://localhost:3000 과 ftp://localhost 를 통과시켰다.
-  // 브라우저는 오리진을 못 속이지만, 이용자 기기의 로컬 개발 서버 페이지는 진짜 그 오리진이다.
   assert.equal(ok("http://localhost:8788", LOCAL), "http://localhost:8788");
-  assert.equal(ok("http://127.0.0.1:8788", LOCAL), "http://127.0.0.1:8788");
+  assert.equal(ok("http://localhost:3000", LOCAL), null, "같은 기기의 다른 포트 페이지가 로컬 함수를 부른다");
+  assert.equal(ok("http://127.0.0.1:8788", LOCAL), null);
   assert.equal(ok("http://localhost:3000", PROD), null, "배포본이 localhost 오리진을 받으면 안 된다");
   assert.equal(ok("http://localhost", PROD), null);
   assert.equal(ok("https://127.0.0.1", PROD), null);
@@ -79,6 +85,18 @@ t("gate 는 오리진을 먼저 보고, 통과해야 속도 제한을 센다", (
     if (r.blocked) hit = i;
   }
   assert.equal(hit, 5, "6번째 요청에서 막혀야 한다");
+});
+
+t("속도 제한은 경로마다 따로 세고, IPv6 는 /64 로 묶는다", () => {
+  const mk = (ip) => ({ url: "https://gaengsin-baseline.pages.dev/api/x",
+    headers: { get: (k) => (k === "origin" ? "https://gaengsin-baseline.pages.dev" : k === "cf-connecting-ip" ? ip : null) } });
+  // parse 를 다섯 번 쓴 IP 도 draft 를 쓸 수 있다. 예전에는 한 카운터를 나눠 써서 막혔다
+  for (let i = 0; i < 5; i++) assert.equal(gate(mk("4.4.4.4"), 10, "parse").blocked, undefined);
+  assert.equal(gate(mk("4.4.4.4"), 5, "draft").blocked, undefined, "parse 호출이 draft 한도를 먹는다");
+  // 같은 /64 의 다른 주소는 한 사람이다. 줄인 표기와 펼친 표기도 같은 블록이다
+  for (let i = 1; i <= 5; i++) assert.equal(gate(mk(`2001:db8:1:2::${i}`), 5, "draft").blocked, undefined);
+  assert.ok(gate(mk("2001:DB8:1:2:ffff:0:0:9"), 5, "draft").blocked, "같은 /64 를 다른 사람으로 센다");
+  assert.equal(gate(mk("2001:db8:1:3::1"), 5, "draft").blocked, undefined, "다른 /64 까지 막는다");
 });
 
 t("모델이 쓴 문장에 숫자가 있으면 버린다", () => {
@@ -175,9 +193,10 @@ t("모델 평가의 전제(프롬프트·검증층 상수)가 동결값과 같�
 t("숫자 검사가 무엇을 통과시키는지 — 천장을 적어 둔다", () => {
   // 모델이 숫자를 못 쓰게 막는 것이 목적인데, 이 검사는 아라비아·전각 숫자와 한글 금액 표현만 본다.
   // 아래는 **통과한다**. 화면이 약속하지 않는 범위를 여기 고정해 두어, 나중에 넓힐 때 무엇이 남았는지 보이게 한다.
-  for (const s of ["일억 정도로 알고 있습니다", "보증금을 두 배로", "다음 달 말일까지", "③억 수준으로"])
+  for (const s of ["일억 정도로 알고 있습니다", "보증금을 두 배로", "다음 달 말일까지"])
     assert.equal(hasDigits(s), false, `천장이 바뀌었다(이제 걸린다): ${s}`);
-  for (const s of ["삼억오천만원", "１２３만원", "제10조", "35,000만원"])
+  // ③·Ⅲ 은 2026-10-25 부터 걸린다(\p{Nd} → \p{N}). 한자 수사(三)는 숫자 문자가 아니라 여전히 통과한다
+  for (const s of ["삼억오천만원", "１２３만원", "제10조", "35,000만원", "③억 수준으로", "Ⅲ억 수준으로"])
     assert.equal(hasDigits(s), true, `막아야 하는데 통과한다: ${s}`);
   // draft 모델은 숫자도 판정 딕셔너리도 받지 않으므로(draft.js), 통과한 수량 표현은 전부 지어낸 것이다.
 });
@@ -223,6 +242,62 @@ t("parse 응답의 면적은 계약을 지난 값만 나간다 — 실제 핸들
     const none = await ask(null);
     assert.equal(none.parsed.area_m2, null);
     assert.ok(!none.warnings.includes("area_m2"), "원래 null 인 것을 버렸다고 적는다");
+  } finally { globalThis.fetch = real; }
+});
+
+t("parse 응답에는 화면이 쓰는 네 칸만 실린다 — 모델이 쓴 자유 문장은 나가지 않는다", async () => {
+  const REQ = ["sgg_nm","umd_nm","bldg_nm","area_m2","rent_type","cur_deposit_manwon",
+    "cur_monthly_manwon","new_deposit_manwon","new_monthly_manwon","rr_right_used_before","confidence","missing"];
+  const ORIGIN = "https://gaengsin-baseline.pages.dev";
+  const LONG = "범용 답변 ".repeat(2000);
+  const real = globalThis.fetch;
+  let sent = null;
+  const ask = async (extra) => {
+    const out = Object.fromEntries(REQ.map((k) => [k, null]));
+    Object.assign(out, { cur_deposit_manwon: 35000, new_deposit_manwon: 38000, new_monthly_manwon: 0,
+      confidence: 0.95, sgg_nm: LONG, bldg_nm: LONG, missing: ["area_m2", LONG] }, extra);
+    globalThis.fetch = async (_u, init) => {
+      sent = JSON.parse(init.body);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }), { status: 200 });
+    };
+    const request = new Request(`${ORIGIN}/api/parse`, { method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+      body: JSON.stringify({ text: "전세 3억5천인데 3억8천으로" }) });
+    return (await parsePost({ request, env: { OPENAI_API_KEY: "sk-dummy" } })).text();
+  };
+  try {
+    for (const extra of [{}, { confidence: 0.1 }, { new_deposit_manwon: 900000 }]) {   // 성공·신뢰도 탈락·범위 탈락
+      const raw = await ask(extra);
+      assert.ok(!raw.includes("범용 답변"), `모델이 쓴 자유 문장이 응답에 실린다: ${JSON.stringify(extra)}`);
+      assert.deepEqual(Object.keys(JSON.parse(raw).parsed).sort(),
+        ["area_m2", "cur_deposit_manwon", "new_deposit_manwon", "new_monthly_manwon"]);
+    }
+    const ok = JSON.parse(await ask({}));
+    assert.equal(ok.ok, true);
+    assert.deepEqual(ok.warnings, ["area_m2"], "warnings 에는 아는 필드 이름만 남아야 한다");
+    assert.equal(sent.max_completion_tokens, 400, "parse 에 출력 상한이 없다");
+  } finally { globalThis.fetch = real; }
+});
+
+t("draft — 상속된 키로 입장을 고르지 않고, 출력 상한을 건다", async () => {
+  const ORIGIN = "https://gaengsin-baseline.pages.dev";
+  const real = globalThis.fetch;
+  let sent = null;
+  globalThis.fetch = async (_u, init) => {
+    sent = JSON.parse(init.body);
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ opening: "안녕하세요.", closing: "감사합니다." }) } }] }), { status: 200 });
+  };
+  try {
+    for (const choice of ["constructor", "__proto__", "toString"]) {
+      const request = new Request(`${ORIGIN}/api/draft`, { method: "POST",
+        headers: { origin: ORIGIN, "content-type": "application/json", "cf-connecting-ip": `t${ip++}` },
+        body: JSON.stringify({ choice }) });
+      const r = await (await draftPost({ request, env: { OPENAI_API_KEY: "sk-dummy" } })).json();
+      assert.equal(r.verified, true);
+      const user = sent.messages.find((m) => m.role === "user").content;
+      assert.ok(user.endsWith("조건을 확인하는 중이다"), `상속된 키가 입장이 된다(${choice}): ${user.slice(-30)}`);
+    }
+    assert.equal(sent.max_completion_tokens, 1000, "draft 에 출력 상한이 없다");
   } finally { globalThis.fetch = real; }
 });
 

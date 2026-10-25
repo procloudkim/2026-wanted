@@ -605,6 +605,17 @@ def selftest():
     sh = shard(recs, names, "2026-09-18", {})
     assert sh["11440"]["buildings"][0]["nm"] == "성산시영"
     assert sh["11440"]["cohorts"] and not sh["11680"]["cohorts"]
+
+    # 원천 키는 .env 에서 그 한 줄만 읽는다. 환경변수가 먼저고, 따옴표와 다른 키는 섞이지 않는다
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, ".env")
+        with open(p, "w", encoding="utf-8") as f:
+            # 이름과 값을 나눠 쓴다 — test_source 가 키를 소스에 대입하는 모양 자체를 막는다
+            f.write("# 주석\nOPENAI_API_KEY=sk-x\n" + "DATA_GO_KR_SERVICE_KEY" + '="abc=="\n')
+        assert service_key(p, {}) == "abc==", service_key(p, {})
+        assert service_key(p, {"DATA_GO_KR_SERVICE_KEY": "env"}) == "env"
+        assert service_key(os.path.join(d, "없음"), {}) is None
     print("selftest ok")
 
 
@@ -621,10 +632,26 @@ def months_back(n=12, today=None):
 
 
 CACHE = os.path.join(os.path.dirname(__file__), "..", "data", "raw-rows.json.gz")
+ENV = os.path.join(os.path.dirname(__file__), "..", ".env")
+
+
+def service_key(path=ENV, environ=os.environ):
+    """원천 키 하나만 읽는다. 셸에 .env 전부를 내보내면(set -a) 그 셸에서 이어서 도는 npx·브라우저가
+    OpenAI 키까지 물려받는다(2026-10-25 감사). 환경변수가 있으면 그것이 먼저다."""
+    if environ.get("DATA_GO_KR_SERVICE_KEY"):
+        return environ["DATA_GO_KR_SERVICE_KEY"]
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            name, _, value = line.strip().partition("=")
+            if name == "DATA_GO_KR_SERVICE_KEY":
+                return value.strip().strip("\"'") or None
+    return None
 
 
 def main(from_cache=False, retry=False):
-    key = os.environ.get("DATA_GO_KR_SERVICE_KEY")
+    key = service_key()
     asof = date.today().isoformat()
     ymds = months_back(12)
     t0 = time.time()
@@ -650,7 +677,7 @@ def main(from_cache=False, retry=False):
                       separators=(",", ":"))
     elif not (from_cache or retry):   # 캐시 경로에서는 절대 재수집하지 않는다
         if not key:
-            sys.exit("DATA_GO_KR_SERVICE_KEY 가 없다. set -a; . ./.env; set +a")
+            sys.exit("DATA_GO_KR_SERVICE_KEY 가 없다. .env 에 넣는다(cp .env.sample .env)")
         print(f"# 수집 시작 {asof} — 자치구 {len(SEOUL)} × 월 {len(ymds)} × 유형 {len(SVC)}")
         rows, errs, zeros, njobs = collect(key, list(SEOUL), ymds)
         print(f"# 수집 완료 {len(rows):,}행, 호출조합 {njobs}, 실패 {len(errs)}, "

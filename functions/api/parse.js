@@ -47,11 +47,20 @@ const SCHEMA = {
 const EMPTY = Object.fromEntries(SCHEMA.schema.required.map((k) =>
   [k, k === "confidence" ? 0 : k === "missing" ? [] : null]));
 
+/* 응답에는 화면이 쓰는 네 칸만 싣는다. 스키마의 나머지(자치구·건물명 같은 자유 문자열, missing)는
+ * 모델 평가의 전제라 그대로 두되 밖으로 내보내지 않는다. 내보내면 이 함수가 우리 비용으로 도는 범용
+ * 문장 생성기가 된다 — 모델이 bldg_nm 에 쓴 2만 6천 자가 그대로 돌아왔다(2026-10-25 감사, 로컬 시험). */
+const FIELDS = new Set(SCHEMA.schema.required);
+const int = (v) => (Number.isInteger(v) ? v : null);
+const pick = (p) => ({ cur_deposit_manwon: int(p.cur_deposit_manwon), new_deposit_manwon: int(p.new_deposit_manwon),
+                       new_monthly_manwon: int(p.new_monthly_manwon), area_m2: areaM2(p.area_m2) });
+const warn = (p) => (Array.isArray(p.missing) ? p.missing : []).filter((k) => FIELDS.has(k));   // 아는 필드 이름만
+
 export async function onRequestPost({ request, env }) {
   const t0 = Date.now();
   const done = (code, res) => { emit("parse", code, t0); return res; };
 
-  const { origin, blocked } = gate(request, 10);
+  const { origin, blocked } = gate(request, 10, "parse");
   if (blocked) return done("E_GATE", blocked);
 
   const { body, err } = await readBody(request);
@@ -59,7 +68,7 @@ export async function onRequestPost({ request, env }) {
 
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text || text.length > 2000)
-    return done("E_INPUT_INVALID", fail("E_INPUT_INVALID", "문장은 1자에서 2,000자 사이로 넣어 주세요.", false, { parsed: EMPTY }, origin));
+    return done("E_INPUT_INVALID", fail("E_INPUT_INVALID", "문장은 1자에서 2,000자 사이로 넣어 주세요.", false, { parsed: pick(EMPTY) }, origin));
 
   const hint = typeof body?.hint?.sgg_nm === "string" ? body.hint.sgg_nm.slice(0, 20) : null;
 
@@ -71,11 +80,13 @@ export async function onRequestPost({ request, env }) {
         { role: "user", content: hint ? `[자치구: ${hint}]\n${text}` : text },
       ],
       response_format: { type: "json_schema", json_schema: SCHEMA },
+      // 출력이 프롬프트 길이에 묶이지 않는다. 실측 출력 97~133토큰(04-API §5.8)의 약 3배에서 끊는다
+      max_completion_tokens: 400,
     }, 10_000);
     parsed = { ...EMPTY, ...JSON.parse(content) };
   } catch {
     // 제공자 장애·타임아웃. 핵심 기능은 그대로 동작하므로 수동 입력 폼으로 보낸다.
-    return done("E_UPSTREAM", fail("E_UPSTREAM", "문장을 자동으로 읽지 못했습니다. 직접 넣어 주세요.", true, { parsed: EMPTY }, origin));
+    return done("E_UPSTREAM", fail("E_UPSTREAM", "문장을 자동으로 읽지 못했습니다. 직접 넣어 주세요.", true, { parsed: pick(EMPTY) }, origin));
   }
 
   // 방어선 2 — 면적 형·범위 계약. 금액과 달리 응답 전체를 버리지 않는다.
@@ -93,13 +104,13 @@ export async function onRequestPost({ request, env }) {
   // 방어선 3 — 자릿수 사고 탐지. confidence 는 통과 근거로 쓰지 않는다.
   const range = rangeCheck(parsed);
   if (range)
-    return done(range, fail(range, "읽어 낸 금액이 범위를 벗어납니다. 값을 직접 확인해 주세요.", false, { parsed }, origin));
+    return done(range, fail(range, "읽어 낸 금액이 범위를 벗어납니다. 값을 직접 확인해 주세요.", false, { parsed: pick(parsed) }, origin));
 
   // 방어선 4 — 신뢰도 게이트. 탈락시킬 때만 쓴다.
   if (!(parsed.confidence >= 0.7) || parsed.new_deposit_manwon == null)
-    return done("E_PARSE_LOW_CONFIDENCE", fail("E_PARSE_LOW_CONFIDENCE", "일부 조건을 읽지 못했습니다. 아래에 직접 넣어 주세요.", false, { parsed }, origin));
+    return done("E_PARSE_LOW_CONFIDENCE", fail("E_PARSE_LOW_CONFIDENCE", "일부 조건을 읽지 못했습니다. 아래에 직접 넣어 주세요.", false, { parsed: pick(parsed) }, origin));
 
-  return done("ok", json({ ok: true, parsed, warnings: parsed.missing || [] }, origin));
+  return done("ok", json({ ok: true, parsed: pick(parsed), warnings: warn(parsed) }, origin));
 }
 
 export const onRequestOptions = ({ request }) => preflight(request);

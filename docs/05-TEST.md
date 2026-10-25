@@ -34,7 +34,7 @@
 ./scripts/test_all.sh
 ├─ python3 scripts/build_assets.py --selftest   ② 수집·집계 (손으로 쓴 XML 픽스처 6행)
 ├─ node scripts/test_rules.mjs                  ① 판정 산술·문장 읽기 34건 (+ 로컬 골든셋 2건)
-├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 13건
+├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 16건
 ├─ node scripts/test_contrast.mjs               ④ 색 대비 36쌍
 ├─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조·프레임워크 734건
 └─ node scripts/test_source.mjs                  ⑥ 소스 금지 패턴·글꼴 고지 24건
@@ -128,7 +128,8 @@
 | 검사 | 지키는 것 |
 |---|---|
 | 오리진 경계 | 남의 사이트가 우리 키를 쓰지 못한다. `evil.example`, 오리진 없는 요청, `…pages.dev.evil.com` 접두어 흉내, http 를 막는다. **로컬 개발 예외는 요청 호스트가 localhost 일 때만** — 배포본에서 `http://localhost` 가 통과하던 것을 막았다(2026-09-18 실측) |
-| 속도 제한 | 오리진을 먼저 보고, 통과해야 IP 단위로 센다 |
+| 속도 제한 | 오리진을 먼저 보고, 통과해야 경로·IP 단위로 센다. IPv6 는 /64 로 묶는다 |
+| 응답·출력 상한 | parse 응답에는 숫자 네 칸만 실리고 모델이 쓴 자유 문장은 성공·탈락 어느 경로로도 나가지 않는다. 두 함수 모두 출력 토큰 상한을 건다. draft 는 상속된 키(`constructor`)를 입장으로 받지 않는다 |
 | 숫자 금지 | 십진 숫자(전각 포함)와 한글 금액 표현을 걸러낸다. 조문 표기(`제6조의3`)의 숫자는 예외다. **"이 글"·"만나서"의 이·만은 걸리지 않아야 한다** — 다 걸면 정상 인사말이 한 줄도 남지 않는다 |
 | 법 결론 금칙어 | `위법`·`청구할 수 있습니다` 등. 표기 규칙 위반어(`미사용`)도 같은 목록이다 |
 | 범위 검사 | "구억육천만원"을 9,600으로 읽고 confidence 0.98을 냈던 실측 사례. 자릿수 사고는 **confidence 로 못 잡는다** |

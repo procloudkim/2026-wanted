@@ -37,14 +37,15 @@ export async function onRequestPost({ request, env }) {
   const t0 = Date.now();
   const done = (code, res) => { emit("draft", code, t0); return res; };
 
-  const { origin, blocked } = gate(request, 5);
+  const { origin, blocked } = gate(request, 5, "draft");
   if (blocked) return done("E_GATE", blocked);
 
   const { body, err } = await readBody(request);
   if (err) return done(err, fail(err, "입력이 너무 길거나 형식이 맞지 않습니다.", false, {}, origin));
 
   const tone = body?.tone === "soft" ? "soft" : "neutral";
-  const stance = CHOICES[body?.choice] || CHOICES["무행동"];
+  // "constructor"·"__proto__" 같은 상속 키가 입장이 되지 않게 자기 키만 본다
+  const stance = Object.hasOwn(CHOICES, body?.choice) ? CHOICES[body.choice] : CHOICES["무행동"];
 
   try {
     const content = await callOpenAI(env, {
@@ -53,6 +54,7 @@ export async function onRequestPost({ request, env }) {
         { role: "user", content: `어조: ${tone === "soft" ? "부드럽게" : "사무적으로"}\n보내는 사람의 입장: ${stance}` },
       ],
       response_format: { type: "json_schema", json_schema: SCHEMA },
+      max_completion_tokens: 1000,   // 실측 출력 356토큰(04-API §5.8)의 약 3배
     }, 15_000);
     const f = JSON.parse(content);
     const text = `${f.opening}\n${f.closing}`;

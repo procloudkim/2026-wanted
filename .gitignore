@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.sample
+.dev.vars*
 
 # 내부 리서치·전략 (경쟁 노출 방지, 로컬 보관)
 decisions/

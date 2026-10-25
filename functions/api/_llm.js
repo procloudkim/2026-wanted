@@ -11,28 +11,17 @@ export const MAX_BODY = 16 * 1024;
  * Access-Control-Allow-Origin: * 를 기본으로 붙이고, 오리진 검사가 없으면
  * 아무 사이트나 제 페이지에서 우리 엔드포인트를 불러 **우리 OpenAI 키를 쓸 수 있다.**
  *
+ * 규칙은 **같은 오리진만**이다. 화면은 늘 자기 오리진의 /api/* 만 부르므로 잃는 기능이 없다.
+ * 예전에는 *.gaengsin-baseline.pages.dev 를 전부 받아서 보안 수정 전의 옛 배포 페이지가 새 배포를
+ * 부를 수 있었고, 로컬에서는 같은 기기의 다른 포트 개발 서버 페이지가 우리 함수를 불렀다(2026-10-25 감사).
+ * 로컬 개발 서버의 페이지는 진짜로 그 오리진을 갖는다 — 브라우저가 못 속인다고 안전한 것이 아니다.
+ *
  * ponytail: 오리진 헤더는 브라우저만 못 속인다. curl 로 위조하는 것은 막지 못한다.
  * 그 경로의 최종 방어선은 제공자 쪽 지출 한도다(README 보안 절 참조). */
-const ORIGIN_SUFFIX = ".gaengsin-baseline.pages.dev";
-const ORIGIN_EXACT = "https://gaengsin-baseline.pages.dev";
-
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-const hostOf = (url) => { try { return new URL(url).hostname; } catch { return ""; } };
-
 export function allowedOrigin(request) {
   const o = request.headers.get("origin");
   if (!o) return null;
-  let u;
-  try { u = new URL(o); } catch { return null; }
-  if (u.protocol === "https:" && (o === ORIGIN_EXACT || u.hostname.endsWith(ORIGIN_SUFFIX))) return o;
-
-  // 로컬 개발 예외는 **요청 자체가 로컬에서 서비스될 때만** 연다.
-  // 배포본이 localhost 오리진을 받으면 이용자 기기에서 도는 아무 페이지나 우리 키를 쓴다 —
-  // 브라우저는 오리진을 못 속이지만 로컬 개발 서버의 페이지는 진짜로 그 오리진을 갖는다.
-  // 실측(2026-09-18): 배포본이 http://localhost:3000 과 ftp://localhost 를 통과시켰다.
-  if ((u.protocol === "http:" || u.protocol === "https:")
-      && LOCAL_HOSTS.has(u.hostname) && LOCAL_HOSTS.has(hostOf(request.url))) return o;
-  return null;
+  try { return o === new URL(request.url).origin ? o : null; } catch { return null; }
 }
 
 const cors = (origin) => (origin
@@ -82,11 +71,11 @@ export const preflight = (request) => {
 };
 
 /** 모든 함수가 가장 먼저 부른다. 통과하면 오리진 문자열, 막히면 Response. */
-export function gate(request, perMinute) {
+export function gate(request, perMinute, route = "") {
   const origin = allowedOrigin(request);
   if (!origin)
     return { blocked: fail("E_FORBIDDEN", "이 요청은 허용되지 않습니다.", false, {}, null) };
-  if (rateLimited(request, perMinute))
+  if (rateLimited(request, perMinute, route))
     return { blocked: fail("E_RATE_LIMITED", "요청이 많습니다. 잠시 후 다시 시도해 주세요.", true, {}, origin) };
   return { origin };
 }
@@ -143,7 +132,9 @@ export async function readBody(request) {
   try { return { body: JSON.parse(raw) }; } catch { return { err: "E_INPUT_INVALID" }; }
 }
 
-/* 아이솔레이트 메모리 속도 제한. IP 단위와 아이솔레이트 전체 단위를 함께 본다.
+/* 아이솔레이트 메모리 속도 제한. 경로·IP 단위와 아이솔레이트 전체 단위를 함께 본다.
+ * 키에 경로를 넣는다 — 같은 IP 의 parse 5회가 draft 한도를 먹고 있었다(2026-10-25 감사).
+ * IPv6 는 /64 로 묶는다. 한 사람이 받은 주소 블록 안에서 새 주소를 끝없이 낼 수 있다.
  * ponytail: 아이솔레이트 단위라 전역 정확도가 없다 — 콜로가 여러 개면 그만큼 곱해진다.
  * 정확한 전역 제한이 필요해지면 KV 나 Durable Object 로 올린다. 그 전의 실질 상한은
  * 제공자 쪽 지출 한도다. */
@@ -152,8 +143,15 @@ let burst = [];
 const WINDOW = 60_000;
 const ISOLATE_PER_MINUTE = 60;   // 한 아이솔레이트가 1분에 넘기지 않는 총량
 
-export function rateLimited(request, perMinute) {
-  const ip = request.headers.get("cf-connecting-ip") || "?";
+const who = (ip) => {
+  if (!ip.includes(":") || ip.includes(".")) return ip;   // IPv4 와 IPv4 매핑 주소는 그대로 센다
+  const [head, tail = ""] = ip.toLowerCase().split("::");
+  const h = head ? head.split(":") : [], t = tail ? tail.split(":") : [];
+  return [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t].slice(0, 4).join(":");
+};
+
+export function rateLimited(request, perMinute, route = "") {
+  const ip = `${route}|${who(request.headers.get("cf-connecting-ip") || "?")}`;
   const now = Date.now();
 
   burst = burst.filter((t) => now - t < WINDOW);
@@ -211,9 +209,9 @@ export const hasForbidden = (text) => FORBIDDEN.find((w) => text.includes(w)) ||
 const STATUTE = /제\s?6\s?조의\s?3|제\s?7\s?조|제\s?1\s?항|제\s?8\s?호/g;
 
 /* 모델이 쓴 문장에 숫자가 있는가. 숫자 문장은 전부 코드가 쓰므로, 있으면 그 문장을 버린다.
- * ASCII 만 보면 전각 "１２３" 이 그대로 통과한다 — \p{Nd} 로 십진 숫자 전부를 본다.
+ * ASCII 만 보면 전각 "１２３" 이 그대로 통과한다 — \p{N} 으로 숫자 문자 전부(①·Ⅲ 포함)를 본다.
  * 한글 수사는 단위에 붙은 것만 본다. "이 글", "만나서" 의 이·만까지 잡으면 정상 문장이 남지 않는다. */
-const DIGIT = /\p{Nd}/u;
+const DIGIT = /\p{N}/u;
 const KO_MONEY = /[일이삼사오육칠팔구십백천만억][억만천]?\s?원/;
 export const hasDigits = (s) => {
   const t = String(s).replace(STATUTE, " ");
