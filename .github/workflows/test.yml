@@ -1,0 +1,27 @@
+# 키·네트워크 없이 도는 검사 6종. 로컬의 ./scripts/test_all.sh 와 같은 것을 돌린다.
+# 저장소 밖 골든셋(decisions/)은 여기 없으므로 동결 라우팅 검사 2건은 건너뛴다(test_rules.mjs 가 그렇게 출력한다).
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 검사는 저장소를 읽기만 한다
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # 액션은 태그가 아니라 커밋 해시로 고정한다 — 태그는 옮겨질 수 있다
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22
+      - run: python3 --version && node --version
+      - run: ./scripts/test_all.sh

@@ -10,8 +10,11 @@ const A = JSON.parse(readFileSync(new URL("../dist/data/anchors.json", import.me
 
 const D = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-let n = 0;
+let n = 0, golden = 0;
 const t = (name, fn) => { fn(); n++; };
+// 골든셋 검사는 따로 센다. 골든셋은 저장소 밖(decisions/, gitignore)이라 깨끗한 클론과 CI 에는 없고,
+// 같이 세면 문서에 적은 건수가 환경마다 달라져 CI 에서만 깨진다(2026-10-25 실측: 로컬 34 / 클론 32).
+const tg = (name, fn) => { fn(); golden++; };
 
 /* ── 반올림: 사사오입. 파이썬 은행원 반올림과 갈리는 자리를 고정한다 ───────── */
 t("반올림은 사사오입", () => {
@@ -390,7 +393,7 @@ t("읽은 값은 판정 산술에 그대로 들어간다", () => {
  * decisions/ 는 저장소 밖(gitignore)이라 없으면 건너뛴다 — 제품 검사가 리서치 자산에 묶이지 않는다. */
 const goldenPath = new URL("../decisions/02-llm-model/golden.json", import.meta.url);
 if (existsSync(goldenPath)) {
-  t("평가셋 라우팅이 동결값과 같다", () => {
+  tg("평가셋 라우팅이 동결값과 같다", () => {
     const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
     const vec = golden.map((c) => (R.readAmounts(c.text).ok ? "r" : "l")).join("");
     assert.equal(vec, "rllllrlrlllrrllllllrl",
@@ -409,7 +412,7 @@ if (existsSync(goldenPath)) {
     }
   });
 
-  t("두 골든셋이 같은 문형에 다른 정답을 동결하지 않는다", () => {
+  tg("두 골든셋이 같은 문형에 다른 정답을 동결하지 않는다", () => {
     // 실측 사고: golden G06 은 월세 0, 이 파일의 PASTES 는 같은 문형에 null 을 기대했고
     // 둘 다 통과했다. 어느 쪽을 고쳐도 회귀 검사가 깨지지 않는 상태였다.
     const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
@@ -462,4 +465,4 @@ for (const f of ["docs/05-TEST.md", "README.md"])
   assert.ok(readFileSync(new URL(`../${f}`, import.meta.url), "utf8").includes(`${n}건`),
     `${f} 가 판정 산술 건수를 ${n}건으로 적고 있지 않다 — 검사를 늘렸으면 문서도 고친다`);
 
-console.log(`rules ok — ${n}건`);
+console.log(`rules ok — ${n}건` + (golden ? ` (+ 로컬 골든셋 ${golden}건)` : " (골든셋 없음: 동결 라우팅 검사 2건을 건너뜀)"));
