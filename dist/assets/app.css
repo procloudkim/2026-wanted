@@ -154,15 +154,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .hero-cta { margin-top: var(--s5); }
 
 /* AI 경계 설명 */
-.aigrid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); margin: var(--s4) 0; }
-.aigrid > div { border: 1px solid var(--border); border-radius: var(--r); padding: var(--s4); }
-.aigrid h3 { font-size: .95rem; margin-bottom: var(--s2); }
-.aigrid p { font-size: .9rem; color: var(--secondary); margin-bottom: var(--s2); }
-.aigrid p:last-child { margin-bottom: 0; }
-.ai-no { border-left: 4px solid var(--accent); }
-.ai-yes { border-left: 4px solid var(--muted-fg); }
-.whylist { font-size: .9rem; color: var(--secondary); padding-left: 1.2em; margin: var(--s3) 0 0; }
-.whylist li { margin-bottom: var(--s3); }
 
 /* 통보 기록 */
 .notices { list-style: none; padding: 0; margin: var(--s4) 0 0; display: grid; gap: var(--s2); }

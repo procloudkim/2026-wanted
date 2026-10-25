@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>갱신 기준선 — 전월세 갱신 조건이 실거래 분포 어디쯤인지</title>
-<meta name="description" content="집주인이 제시한 갱신 조건이 같은 단지·평형의 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인합니다. 판정은 코드가 하고, 숫자는 만들어 내지 않습니다.">
+<title>갱신 기준선 | 제시받은 전월세 갱신 조건을 실제 갱신 계약과 견줘 봅니다</title>
+<meta name="description" content="집주인이 제시한 전월세 갱신 조건이 같은 단지·평형의 실제 갱신 계약들 사이에서 어디쯤인지 국토교통부 실거래 신고 자료로 확인합니다. 갱신 요구 마감일과 5% 상한 금액도 함께 계산합니다.">
 <meta name="color-scheme" content="light dark">
 <link rel="canonical" href="https://gaengsin-baseline.pages.dev/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://gaengsin-baseline.pages.dev/">
 <meta property="og:site_name" content="갱신 기준선">
 <meta property="og:locale" content="ko_KR">
-<meta property="og:title" content="같은 법인데 결과가 86배 갈립니다 — 갱신 기준선">
-<meta property="og:description" content="갱신요구권 행사 기록이 있는 갱신 40,814건 중 5% 초과는 0.37%, 기록이 없는 44,877건은 31.95%. 제시받은 조건이 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인하세요.">
+<meta property="og:title" content="제시받은 갱신 조건, 실제 갱신 계약들 사이에서 어디쯤일까요 | 갱신 기준선">
+<meta property="og:description" content="서울 전세 갱신 가운데 갱신요구권 행사 기록이 있는 40,869건은 0.37%, 기록이 없는 44,720건은 32.46%가 5%를 넘겨 올랐습니다. 제시받은 조건을 실제 갱신 계약과 견줘 보세요.">
 <meta property="og:image" content="https://gaengsin-baseline.pages.dev/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="갱신요구권 행사 기록이 있는 계약의 5% 초과 비율 0.37%와 기록이 없는 계약의 31.95%를 나란히 비교한 카드">
+<meta property="og:image:alt" content="갱신 기준선 공유 카드. 갱신요구권 행사 기록이 있는 갱신과 없는 갱신의 5% 초과 비율을 나란히 보여 준다">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="같은 법인데 결과가 86배 갈립니다 — 갱신 기준선">
-<meta name="twitter:description" content="갱신요구권 행사 기록이 있는 갱신 40,814건 중 5% 초과는 0.37%, 기록이 없는 44,877건은 31.95%. 제시받은 조건이 실제 갱신 계약들 사이에서 어디쯤인지 공개 실거래 데이터로 확인하세요.">
+<meta name="twitter:title" content="제시받은 갱신 조건, 실제 갱신 계약들 사이에서 어디쯤일까요 | 갱신 기준선">
+<meta name="twitter:description" content="서울 전세 갱신 가운데 갱신요구권 행사 기록이 있는 40,869건은 0.37%, 기록이 없는 44,720건은 32.46%가 5%를 넘겨 올랐습니다. 제시받은 조건을 실제 갱신 계약과 견줘 보세요.">
 <meta name="twitter:image" content="https://gaengsin-baseline.pages.dev/og.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230F172A'/><path d='M7 22V10M13 22v-7M19 22v-11M25 22v-4' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
 <link rel="stylesheet" href="assets/app.css?v=3">
@@ -44,19 +44,20 @@
   <section class="hero">
     <h1>제시받은 갱신 조건이<br>실제 갱신 계약들 사이에서 <em>어디쯤</em>인지 봅니다.</h1>
     <p class="lede">
-      판정은 코드가 합니다. 언어 모델은 문장을 읽고 문장을 쓰는 두 단계만 맡고 <strong>숫자를 만들지 않습니다</strong>.
-      표본이 없으면 만들어 내지 않고 <strong>판정 불가로 끝냅니다</strong>.
+      국토교통부에 신고된 실제 갱신 계약과 견줘, 제시받은 인상률이 흔한 편인지 높은 편인지 보여 드립니다.
+      <strong>갱신 요구 마감일</strong>과 <strong>5% 상한 금액</strong>도 함께 계산합니다.
+      견줄 계약이 모자라면 추정하지 않고 그렇다고 알려 드립니다.
     </p>
     <dl class="anchors" id="anchors" aria-label="서울 전체 집계">
       <div><dt>갱신요구권 행사 기록 있음</dt><dd><b id="a-rec-over">—</b><span id="a-rec-n">—</span></dd></div>
       <div><dt>행사 기록 없음</dt><dd><b id="a-unrec-over">—</b><span id="a-unrec-n">—</span></dd></div>
-      <div><dt>초과 차액 건당 중앙값</dt><dd><b id="a-excess">—</b><span>행사 기록 없는 초과 건</span></dd></div>
+      <div><dt>5% 상한 대비 초과액</dt><dd><b id="a-excess">—</b><span>행사 기록 없이 5%를 넘긴 갱신의 중앙값</span></dd></div>
     </dl>
     <p class="anchor-note" id="anchor-scope">—</p>
-    <p class="anchor-note"><strong>&ldquo;행사 기록 없음&rdquo;은 갱신 계약의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong>
-      법정 신고서가 2지 택일만 두고 있어 미행사로 읽지만 <strong>이것은 해석이고 근거 등급은 B</strong>입니다 &mdash;
-      미기재가 섞여 있어도 데이터만으로는 갈라지지 않습니다. 해석에 기대지 않는 문장은 이것입니다:
-      <strong>전세&rarr;전세 갱신의 <span id="a-all-over">—</span>가 5%를 넘겼습니다.</strong></p>
+    <p class="anchor-note">행사 기록이 있는 쪽이 거의 5%를 넘지 않는 것은 <strong>갱신요구권을 행사하면 법이 인상을 5%로 묶기 때문</strong>입니다.
+      <strong>&ldquo;행사 기록 없음&rdquo;은 신고서의 갱신요구권 칸이 비어 있다는 뜻</strong>입니다. 신고서가 행사와 미행사 가운데 하나를 고르게 되어 있어 미행사로 읽지만,
+      체크를 빠뜨린 신고가 섞여 있어도 자료로는 가려낼 수 없습니다. 이 해석에 기대지 않고 말할 수 있는 사실은
+      <strong>전세&rarr;전세 갱신의 <span id="a-all-over">—</span>가 5%를 넘겨 올랐다</strong>는 것입니다.</p>
     <div class="rowbtns hero-cta">
       <button type="button" class="btn primary" id="demo-btn">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
@@ -68,15 +69,15 @@
         공유
       </button>
     </div>
-    <p class="anchor-note">예시는 강남구 대치동 전용 84.9㎡, 현재 보증금 9억원에 <b>+8%</b>를 제시받은 경우입니다. 실제 실거래 데이터로 즉시 판정합니다.</p>
+    <p class="anchor-note">예시는 강남구 대치동 전용 84.9㎡, 보증금 9억원에 <b>8% 인상</b>을 제시받은 경우입니다. 실제 신고 자료로 바로 계산합니다.</p>
   </section>
 
   <!-- ── S1 계약 입력 ─────────────────────────────────────────────────── -->
   <section class="card" id="s1">
-    <h2><span class="step">1</span> 계약 입력</h2>
+    <h2><span class="step">1</span> 지금 계약</h2>
     <p class="note">
-      입력은 이 7개뿐입니다. <strong>이름·연락처·동·호수·계약서 파일은 받지 않습니다.</strong>
-      넣으신 값은 이 브라우저에만 저장되고, 판정은 브라우저 안에서 끝납니다.
+      <strong>이름·연락처·동·호수·계약서 파일은 받지 않습니다.</strong>
+      입력하신 값은 이 브라우저에만 저장되고, 계산도 브라우저 안에서 끝납니다.
     </p>
 
     <form id="form" novalidate>
@@ -89,7 +90,7 @@
             <option value="연립다세대">연립·다세대</option>
             <option value="단독다가구">단독·다가구</option>
           </select>
-          <small class="help" id="kind-help">아파트만 같은 단지끼리 비교합니다. 나머지 세 유형은 원천에 단지 일련번호가 없어 같은 동네·비슷한 면적 기준입니다.</small>
+          <small class="help" id="kind-help">아파트만 같은 단지끼리 비교합니다. 나머지 세 유형은 신고 자료에 단지 번호가 없어 같은 동네의 비슷한 면적끼리 비교합니다.</small>
         </p>
         <p class="field">
           <label for="gu">자치구</label>
@@ -165,7 +166,7 @@
           <p class="field">
             <label for="otext">집주인에게 받은 문장</label>
             <textarea id="otext" rows="3" maxlength="1000" placeholder="전세 3억5천인데 3억8천으로 올려달라고 하시네요"></textarea>
-            <small class="help">읽어서 금액으로 바꾸기만 합니다. 정형 문장은 <strong>브라우저 안에서 읽고 서버로 보내지 않습니다.</strong> 넘어가는 경우에도 <strong>원문은 저장하지 않습니다.</strong></small>
+            <small class="help">문장에서 금액만 읽어 칸에 넣습니다. &ldquo;3억5천에서 3억8천으로&rdquo; 같은 문장은 <strong>이 브라우저 안에서 읽고 서버로 보내지 않습니다.</strong> 그렇지 않은 문장은 서버의 AI가 읽지만 <strong>원문은 저장하지 않습니다.</strong></small>
           </p>
           <button type="button" class="btn ghost" id="parse-btn">문장에서 금액 읽기</button>
           <p class="confirm" id="parse-out" hidden></p>
@@ -176,7 +177,7 @@
       </fieldset>
 
       <details class="more">
-        <summary>선택 입력 3개 — 해당하면 판정이 달라집니다</summary>
+        <summary>해당하면 결과가 달라지는 선택 입력</summary>
         <div class="grid">
           <p class="field">
             <label for="signed">계약 체결일</label>
@@ -184,11 +185,11 @@
             <small class="help">2020년 12월 10일 이전이면 마감 기준이 다를 수 있습니다.</small>
           </p>
           <p class="field">
-            <label for="used">갱신요구권을 이미 쓴 적이 있습니까</label>
+            <label for="used">이 집에서 갱신요구권을 이미 쓴 적이 있습니까</label>
             <select id="used"><option value="모름">모름</option><option value="예">예</option><option value="아니오">아니오</option></select>
           </p>
           <p class="field">
-            <label for="notice">임대인에게 만료·실거주 통보를 받았습니까</label>
+            <label for="notice">집주인에게 만료·실거주 통보를 받았습니까</label>
             <select id="notice">
               <option value="모름">모름</option>
               <option value="만료">만료 통보를 받았다</option>
@@ -200,7 +201,7 @@
       </details>
 
       <div class="actions">
-        <button type="submit" class="btn primary">판정하기</button>
+        <button type="submit" class="btn primary">결과 보기</button>
         <button type="button" class="btn ghost" id="clear-btn">입력 지우기</button>
       </div>
     </form>
@@ -212,20 +213,20 @@
 
     <!-- ── S2 기준선 ─────────────────────────────────────────────────── -->
     <section class="card" id="s2" hidden>
-      <h2><span class="step">2</span> 기준선 — 법정 기한</h2>
+      <h2><span class="step">2</span> 갱신 요구 기한</h2>
       <div id="timeline"></div>
       <div class="paths" id="paths"></div>
       <div class="rowbtns">
         <button type="button" class="btn ghost" id="ics-btn">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 012 2v11a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
-          마감일 캘린더 파일 내려받기
+          마감일을 캘린더에 넣기(.ics)
         </button>
       </div>
     </section>
 
     <!-- ── S3 판정 ───────────────────────────────────────────────────── -->
     <section class="card" id="s3" hidden>
-      <h2><span class="step">3</span> 판정 — 제시 조건 대조</h2>
+      <h2><span class="step">3</span> 제시받은 조건은 어디쯤인가요</h2>
       <div id="verdict"></div>
       <div id="cohort"></div>
       <div id="groups"></div>
@@ -238,29 +239,29 @@
       </div>
       <p class="legal">
         <strong>5% 상한은 갱신요구권을 행사한 갱신에 적용되고, 합의로 맺은 갱신에는 적용되지 않습니다.</strong>
-        화면의 &ldquo;초과 차액&rdquo;은 <strong>위법 금액이 아니라</strong>, 갱신요구권을 행사했을 때의 상한과 제시받은 조건의 차이입니다.
+        화면의 &ldquo;상한 대비 차액&rdquo;은 <strong>위법 금액이 아니라</strong> 갱신요구권을 행사했을 때의 상한과 제시받은 조건의 차이입니다.
       </p>
     </section>
 
     <!-- ── S4 이탈 비용 ──────────────────────────────────────────────── -->
     <section class="card" id="s4" hidden>
-      <h2><span class="step">4</span> 나가면 얼마를 더 내야 하나</h2>
+      <h2><span class="step">4</span> 나가서 새로 구하면 얼마일까요</h2>
       <div id="market"></div>
       <p class="legal">
-        이 차액에는 <strong>이사비·중개보수·대출 조건이 들어 있지 않고</strong>, 그 값에 실제 매물이 있는지도 이 데이터는 답하지 않습니다. 차액이 곧 이득은 아닙니다.
+        이 차액에는 <strong>이사비·중개보수·대출 조건이 들어 있지 않습니다.</strong> 그 금액에 실제 매물이 있는지도 이 자료로는 알 수 없으니, 차액을 그대로 이득으로 보지 마세요.
       </p>
     </section>
 
     <!-- ── S7 환산 ───────────────────────────────────────────────────── -->
     <section class="card" id="s7" hidden>
-      <h2><span class="step">4</span> 환산 — 월세가 섞인 조건</h2>
+      <h2><span class="step">4</span> 월세가 섞인 조건</h2>
       <div id="convert"></div>
     </section>
 
     <!-- ── S5 선택 기록과 문안 ───────────────────────────────────────── -->
     <section class="card" id="s5" hidden>
-      <h2><span class="step">5</span> 선택 기록과 문안</h2>
-      <p class="note">마감 전에 <strong>행사 / 합의 / 무행동</strong> 중 하나를 고르는 것이 이 화면의 목적입니다. 고르지 않고 마감을 넘기는 것이 가장 비싼 결과입니다.</p>
+      <h2><span class="step">5</span> 어떻게 할지 정하고 답장 쓰기</h2>
+      <p class="note">마감 전에 셋 가운데 하나를 정해 두세요. <strong>정하지 않은 채 마감을 넘기면 이번 만기에는 갱신요구권을 쓸 수 없습니다.</strong></p>
       <div class="choices" id="choices" role="group" aria-label="선택 기록">
         <button type="button" class="choice" data-choice="행사">갱신요구권을 행사한다</button>
         <button type="button" class="choice" data-choice="합의">합의로 갱신한다</button>
@@ -269,7 +270,7 @@
       <p class="chosen" id="chosen" hidden></p>
       <div class="draft">
         <div class="rowbtns">
-          <button type="button" class="btn primary" id="draft-btn">이 숫자로 회신 문안 만들기</button>
+          <button type="button" class="btn primary" id="draft-btn">이 숫자로 답장 초안 만들기</button>
           <button type="button" class="btn ghost" id="copy-btn" hidden>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             복사
@@ -278,18 +279,18 @@
         <div id="draft-out" hidden></div>
       </div>
       <p class="legal">
-        이 화면은 <strong>실거주 주장의 진위, 계약서 문구와 특약의 효력, 권리 성립 여부를 판정하지 않습니다.</strong>
-        이 서비스가 만든 문안은 법률 문서가 아니며 도달 여부와 효력도 판정하지 않습니다.
+        이 서비스는 <strong>실거주 주장이 사실인지, 계약서 문구와 특약이 유효한지, 권리가 성립하는지 판단하지 않습니다.</strong>
+        만들어 드리는 초안은 법률 문서가 아니며, 상대에게 도달했는지와 효력도 판단하지 않습니다.
       </p>
     </section>
 
     <!-- ── 통보 기록 양식 (O-02) ─────────────────────────────────────── -->
     <section class="card" id="s-notice" hidden>
-      <h2><span class="step">기록</span> 임대인 통보 기록</h2>
+      <h2><span class="step">기록</span> 집주인 통보 기록</h2>
       <p class="note">
-        실거주 주장의 <strong>진위는 판정하지 않습니다.</strong> 지금 할 일은 통보 내용을
-        <strong>일시·수단·발화자와 함께 남기는 것</strong>입니다. 이 기록은 <strong>이 브라우저에만</strong> 저장되고
-        서버로 가지 않습니다. 내보내기는 직접 실행하셔야 합니다.
+        실거주 주장이 <strong>사실인지는 판단하지 않습니다.</strong> 지금 할 일은 통보받은 내용을
+        <strong>일시·수단·말한 사람과 함께 적어 두는 것</strong>입니다. 기록은 <strong>이 브라우저에만</strong> 저장되고
+        서버로 보내지 않습니다.
       </p>
       <div class="grid">
         <p class="field">
@@ -304,12 +305,12 @@
           </select>
         </p>
         <p class="field">
-          <label for="nt-who">발화자</label>
-          <input id="nt-who" placeholder="예: 임대인 본인 / 중개인" maxlength="40">
+          <label for="nt-who">말한 사람</label>
+          <input id="nt-who" placeholder="예: 집주인 본인 / 중개인" maxlength="40">
         </p>
       </div>
       <p class="field">
-        <label for="nt-what">통보 요지</label>
+        <label for="nt-what">들은 내용</label>
         <textarea id="nt-what" rows="3" maxlength="500" placeholder="예: 실거주할 예정이라 갱신은 어렵다고 하심"></textarea>
         <small class="help">들으신 말을 그대로 적으세요. 해석은 적지 않는 편이 낫습니다.</small>
       </p>
@@ -322,73 +323,51 @@
       </div>
       <ol class="notices" id="nt-list"></ol>
       <p class="legal">
-        이 기록은 법률 문서가 아니고, 이 서비스는 도달 여부와 효력을 판정하지 않습니다.
-        다툼이 필요하면 아래 상담 창구로 가세요.
+        이 기록은 법률 문서가 아닙니다. 다툼이 생기면 아래 상담 창구에 문의하세요.
       </p>
     </section>
 
     <!-- ── S6 3관문 ──────────────────────────────────────────────────── -->
     <section class="card" id="s6" hidden>
-      <h2><span class="step">6</span> 계약 후 3관문</h2>
-      <p class="note">계약 만기와 별도로 등록해야 하는 날짜 3개입니다. 계약일에 몰아서 처리되지 않습니다.</p>
-      <ul class="gates" id="gates"></ul>
+      <h2><span class="step">6</span> 갱신 계약 뒤 챙길 것</h2>
+      <p class="note">만기일과 기한이 따로 움직입니다. 갱신 계약서를 쓴 날을 기준으로 챙기세요.</p>
+      <ul class="gates">
+        <li><span class="d">30일 안</span><span>임대차 신고<small>보증금이나 월세가 바뀐 갱신 계약은 계약일부터 30일 안에 신고해야 합니다(보증금 6천만원 또는 월세 30만원 초과, 서울 포함). 계약서를 함께 내면 확정일자도 받은 것이 됩니다.</small></span></li>
+        <li><span class="d">계약 직후</span><span>늘어난 보증금의 확정일자<small>보증금이 올랐다면 새 계약서에 확정일자를 받아야 늘어난 금액에도 순위가 생깁니다.</small></span></li>
+        <li><span class="d">만기 전</span><span>전세대출 연장<small>대출 만기는 임대차 만기와 다를 수 있습니다. 연장 조건과 필요한 서류를 은행에 미리 확인하세요.</small></span></li>
+        <li><span class="d">갱신 뒤</span><span>보증금 반환보증 갱신<small>전세보증금 반환보증은 저절로 이어지지 않습니다. 보증기관에 갱신을 신청하고, 보증금이 올랐다면 늘어난 금액도 함께 신청하세요.</small></span></li>
+      </ul>
     </section>
   </div>
 </main>
 
 <section class="wrap" id="how-ai">
   <div class="card">
-    <h2>이 서비스가 AI를 쓰는 곳과 쓰지 않는 곳</h2>
+    <h2>숫자는 어디서 오나요</h2>
     <p class="note">
-      화면의 숫자가 어디서 왔는지 아는 것이, 그 숫자를 협상 자리에 들고 갈지 정하는 데 필요하다고 봤습니다.
+      화면의 숫자는 모두 국토교통부에 신고된 실거래 자료로 계산하며, 같은 입력이면 언제나 같은 값이 나옵니다.
+      AI는 붙여넣은 문장에서 금액을 읽고 답장 초안의 인사말을 쓰는 데만 쓰고, <strong>숫자는 만들지 않습니다.</strong>
+      AI가 멈춰도 계산 결과는 그대로 나옵니다.
     </p>
-    <div class="aigrid">
-      <div class="ai-no">
-        <h3>판정에는 쓰지 않습니다</h3>
-        <p>인상률, 5% 상한 금액과 차액, 코호트 백분위, 표본 수, 신규 시세 대비 차액, 환산 부담률, 법정 기한 —
-        <strong>일곱 가지 전부 사칙연산과 정렬입니다.</strong> 같은 입력이면 항상 같은 답이 나오고,
-        종이에 옮겨 검산할 수 있습니다. <strong>언어 모델이 끊겨도 이 숫자들은 그대로 나옵니다.</strong></p>
-      </div>
-      <div class="ai-yes">
-        <h3>두 곳에만 씁니다</h3>
-        <p><b>① 읽기</b> — 집주인에게 받은 문장에서 금액을 꺼냅니다. 판정하지 않고, 응답 형식에 판정이 들어갈 자리가 없습니다. <strong>&ldquo;3억5천에서 3억8천으로&rdquo; 같은 정형 문장은 모델을 부르지 않고 브라우저 안에서 읽습니다</strong> — 그 경우 문장이 서버로 나가지 않습니다.</p>
-        <p><b>② 인사말 쓰기</b> — 회신 문안의 첫 문장과 끝 문장만 씁니다.
-        <strong>숫자가 든 문장은 전부 코드가 만들고, 모델이 쓴 부분에 숫자나 금액 표현이 있으면 버립니다.</strong></p>
-      </div>
-    </div>
-    <details class="more">
-      <summary>왜 이렇게까지 나눴는지 — 실제로 겪은 것 셋</summary>
-      <ol class="whylist">
-        <li><b>자릿수를 틀리면서 확신했습니다.</b> 어떤 모델은 &ldquo;구억육천만원&rdquo;을 9,600만원으로,
-        &ldquo;2억4천&rdquo;을 24억으로 읽으면서 확신도 1.0을 냈습니다. 그래서 확신도는 <strong>탈락시킬 때만</strong> 쓰고,
-        통과는 실거래 분포와 대조해서 정합니다.</li>
-        <li><b>숫자는 맞히고 이름표를 바꿨습니다.</b> 계산된 값을 주고 문장을 쓰게 했더니
-        코호트 전체 건수를 &ldquo;권리를 행사한 건수&rdquo;로, 5% 상한액을 &ldquo;제시된 보증금&rdquo;으로 썼습니다.
-        숫자만 검사해서는 잡히지 않아, 검사를 늘리는 대신 <strong>모델이 숫자를 쓰지 못하게 했습니다.</strong></li>
-        <li><b>모델을 탓하기 전에 지시문이 문제였습니다.</b> 후보 모델 넷이 같은 문장을 틀렸는데,
-        원인은 &ldquo;적힌 값만 뽑으라&rdquo;고 해 놓고 추론을 기대한 지시문이었습니다.
-        지시문을 고치니 넷 다 맞혔습니다. 모델은 기준을 정해 놓고 비교해서 골랐습니다.</li>
-      </ol>
-    </details>
   </div>
 </section>
 
 <footer class="wrap foot">
   <h2 class="sr">데이터 한계와 법률 경계</h2>
   <ol class="limits" id="limits">
-    <li>이 판정의 데이터 기준일은 <b id="f-asof">—</b>입니다. <code>계약구분</code>이 비어 판정에서 빠지는 행이 <strong><span class="n-rows">—</span>행 중 <span id="f-blank-n">—</span>행(<span id="f-blank-pct">—</span>)</strong> 있고, 신고와 정정이 반영되는 데 시간이 걸리므로 <strong>최근 계약일수록 표본에서 빠질 수 있습니다.</strong></li>
-    <li>계산 범위는 <strong>서울</strong>입니다. 서울 숫자를 다른 지역에 적용하지 않습니다.</li>
-    <li>원천이 단지 일련번호를 주는 유형은 <strong>아파트뿐입니다.</strong> 오피스텔·연립·다세대·단독·다가구는 <strong><span class="n-rows">—</span>행 전부</strong> 비어 있어 같은 건물끼리 비교할 수 없고, <strong>같은 법정동·비슷한 면적</strong>으로 비교합니다.</li>
+    <li>데이터 기준일은 <b id="f-asof">—</b>입니다. 신고서의 계약 구분(신규·갱신)이 비어 있어 계산에서 뺀 행이 <strong><span class="n-rows">—</span>행 중 <span id="f-blank-n">—</span>행(<span id="f-blank-pct">—</span>)</strong> 있습니다. 신고가 반영되기까지 시간이 걸려서 <strong>최근 계약일수록 빠져 있을 수 있습니다.</strong></li>
+    <li>계산 범위는 <strong>서울</strong>입니다. 다른 지역에는 서울 숫자를 쓰지 않습니다.</li>
+    <li>신고 자료에 단지 번호가 있는 유형은 <strong>아파트뿐입니다.</strong> 오피스텔·연립·다세대·단독·다가구는 같은 건물끼리 묶을 수 없어 <strong>같은 법정동의 비슷한 면적</strong>끼리 비교합니다.</li>
     <li>이 숫자들은 <strong>신고된 결과이지 예측이 아닙니다.</strong> 앞으로의 시세도, 협상의 결과도 예측하지 않습니다.</li>
-    <li id="limit-5" hidden><strong>&ldquo;행사 기록 없음&rdquo;은 갱신 계약의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong> 법정 신고서 서식이 갱신 계약에 대해 행사/미행사 2지 택일만 두고 있고 데이터 생산기관도 빈 값을 미사용으로 집계하므로 미행사로 읽지만(근거 등급 B), 공표 데이터에 미기재가 섞여 있어도 데이터만으로는 분리되지 않습니다. 신규 계약 행은 이 칸이 100% 비어 있고 그 빈 값은 &lsquo;해당 없음&rsquo;이라 <strong>이 집계에서 제외했습니다.</strong></li>
+    <li id="limit-5" hidden><strong>&ldquo;행사 기록 없음&rdquo;은 신고서의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong> 신고서가 행사와 미행사 가운데 하나를 고르게 되어 있고 자료를 만드는 기관도 빈 칸을 미사용으로 세므로 미행사로 읽지만, 체크를 빠뜨린 신고와는 가려낼 수 없습니다. 신규 계약은 이 칸이 원래 비어 있어 <strong>집계에서 뺐습니다.</strong></li>
     <li id="limit-6" hidden>위 5% 초과 비율은 <strong>월세가 없는 전세→전세 계약만</strong>으로 계산했습니다. 월세가 섞인 계약은 환산할 때 쓰는 전환율에 따라 값이 크게 달라져서 넣지 않았습니다.</li>
   </ol>
   <p class="legal strong">
-    이 서비스는 신고된 실거래 데이터로 <strong>계약의 위치를 숫자로 보여 줍니다. 법률 자문을 하지 않습니다.</strong>
-    법 조항은 원문과 출처를 그대로 보여 주고 링크만 겁니다. 판단이 필요하면
+    이 서비스는 신고된 실거래 자료로 <strong>계약이 어디쯤인지 숫자로 보여 줄 뿐, 법률 자문을 하지 않습니다.</strong>
+    법 조항은 원문 링크로만 안내합니다. 판단이 필요하면
     <a href="https://www.hujeong.or.kr/" target="_blank" rel="noopener">주택임대차분쟁조정위원회</a>,
     <a href="https://www.klac.or.kr/" target="_blank" rel="noopener">대한법률구조공단(☎132)</a>,
-    <a href="https://www.seoul.go.kr/" target="_blank" rel="noopener">서울시 전월세보증금지원센터</a>로 가세요.
+    <a href="https://www.seoul.go.kr/" target="_blank" rel="noopener">서울시 전월세보증금지원센터</a>에 문의하세요.
   </p>
   <p class="src">
     출처 — 국토교통부 전월세 실거래가(아파트·연립다세대·단독다가구·오피스텔, 이용허락 제한 없음),

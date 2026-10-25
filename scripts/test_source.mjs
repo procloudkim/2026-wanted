@@ -44,8 +44,8 @@ forbid(/document\.write\s*\(/, "document.write 는 쓰지 않는다");
  * 문자열 검사로 못 본다. 대신 **자리 수를 고정**해서 새 자리가 조용히 늘지 않게 한다.
  * 늘거나 줄면 사람이 그 자리를 보고 이 숫자를 고친다. 그것이 여기서 할 수 있는 정직한 최대치다. */
 const SINKS = [...read("dist/assets/app.js").matchAll(/\.innerHTML\s*=\s*([^\n]*)/g)].map((m) => m[1].trim());
-assert.equal(SINKS.length, 26,
-  `dist/assets/app.js 의 innerHTML 자리가 26개에서 ${SINKS.length}개로 바뀌었다 — 새 자리가 esc() 를 지나는지 확인하고 이 숫자를 고친다`);
+assert.equal(SINKS.length, 25,
+  `dist/assets/app.js 의 innerHTML 자리가 25개에서 ${SINKS.length}개로 바뀌었다 — 새 자리가 esc() 를 지나는지 확인하고 이 숫자를 고친다`);
 for (const rhs of SINKS) {
   // 맨 변수를 그대로 넣는 자리는 el() 헬퍼 하나뿐이고, 거기 들어가는 문자열은 호출부에서 만든다.
   const bare = /^[a-zA-Z_$][\w$]*\s*;/.test(rhs);

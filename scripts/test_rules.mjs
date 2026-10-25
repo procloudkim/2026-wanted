@@ -107,14 +107,14 @@ t("R3 — 데모 코호트: 행사 기록 있는 갱신을 섞으면 제시안�
   const shard = JSON.parse(readFileSync(new URL("../dist/data/cohort/11680.json", import.meta.url), "utf8"));
   const rec = shard.cohorts["아파트|11680|대치동||80-90"];
   const r = R.r3Percentile(rec, 90000, 97200);
-  assert.equal(r.n, 111);
-  assert.equal(r.top_share_pct, 47.7);
+  assert.equal(r.n, 103);
+  assert.equal(r.top_share_pct, 47.6);
   assert.equal(r.median_pct, 7.37);
-  assert.deepEqual(r.recorded, { n: 205, within_cap_pct: 100.0 });
-  // 예전 구현(두 벡터를 합침)은 같은 제시를 316건 중 상위 16.8% 로 냈다
+  assert.deepEqual(r.recorded, { n: 187, within_cap_pct: 100.0 });
+  // 예전 구현(두 벡터를 합침)은 같은 제시를 290건 중 상위 16.9% 로 낸다(2026-10-25 스냅샷)
   const merged = [...rec.rr, ...rec.nr];
-  assert.equal(merged.length, 316);
-  assert.equal(R.round1((merged.filter((x) => x >= 800).length / merged.length) * 100), 16.8);
+  assert.equal(merged.length, 290);
+  assert.equal(R.round1((merged.filter((x) => x >= 800).length / merged.length) * 100), 16.9);
 });
 
 t("R3 — 정수 비교와 실수 비교는 만원 단위 정수에서는 갈리지 않는다", () => {
@@ -353,6 +353,9 @@ const PASTES = [
   ["전세 3억5천에서 12억으로 올려달래요", null],           // +243% — 범위 밖
   ["500만원에서 600만원으로", null],                       // 보증금 하한 미만. 월세·관리비와 구분되지 않는다
   ["3억5천 3억8천", null],                                 // 방향 표시가 없다
+  // 문법 밖 조각을 건너뛰면 조용히 틀린다 (2026-10-25 실측 회귀: 9억 → 9억, 9억7천2백 → 9억 7천)
+  ["전세 9억인데 9억 7천2백으로 올려달래요", null],
+  ["9억에서 9억7천2백으로", null],
   ["", null],
   [null, null],
 ];

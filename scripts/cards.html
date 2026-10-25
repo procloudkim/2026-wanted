@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>갱신 기준선 공유 카드</title>
+<!-- 공유 카드(?kind=og, 1200×630)와 README 커버(?kind=cover, 1600×900)의 템플릿.
+     값은 dist/data/anchors.json 에서 읽는다. 손으로 고치지 않는다 — 만들기: python3 scripts/make_cards.py -->
+<link rel="stylesheet" href="../dist/assets/app.css">
+<style>
+  html, body { margin: 0; }
+  /* 아래 display 지정이 hidden 속성을 덮으면 두 판형이 한 장에 겹친다(실측) */
+  [hidden] { display: none !important; }
+  body.c { background: #0B1220; color: #E2E8F0; overflow: hidden; }
+  body.og { width: 1200px; height: 630px; }
+  body.cover { width: 1600px; height: 900px; }
+
+  .c-og { box-sizing: border-box; height: 630px; padding: 60px 72px 52px; display: flex; flex-direction: column; }
+  .c-brand { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 700; color: #94A3B8; }
+  .c-brand svg { width: 30px; height: 30px; fill: none; stroke: #38BDF8; stroke-width: 2.5; stroke-linecap: round; }
+  .c-og h1 { font-size: 50px; line-height: 1.28; margin: 34px 0 0; color: #FFFFFF; font-weight: 700; }
+  .c-og h1 em, .c-cover h1 em { font-style: normal; color: #38BDF8; }
+  .c-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: auto; }
+  .c-card { background: #111A2E; border-radius: 16px; padding: 24px 32px 22px; border-left: 6px solid #38BDF8; }
+  .c-card.warn { border-left-color: #F87171; }
+  .c-k { font-size: 22px; color: #94A3B8; }
+  .c-v { font-size: 64px; line-height: 1.15; font-weight: 700; color: #FFFFFF; margin: 8px 0 4px; }
+  .c-card.warn .c-v { color: #F87171; }
+  .c-s { font-size: 19px; color: #94A3B8; }
+  .c-foot { margin-top: 24px; font-size: 19px; color: #7C8DA6; }
+
+  .c-cover { box-sizing: border-box; height: 900px; padding: 0 64px 0 96px; display: grid; grid-template-columns: 540px 1fr; gap: 52px; align-items: center; }
+  .c-title { font-size: 92px; line-height: 1.1; font-weight: 700; color: #FFFFFF; margin: 0; }
+  .c-bar { width: 96px; height: 8px; background: #0369A1; margin: 26px 0 40px; border-radius: 4px; }
+  .c-cover h1 { font-size: 34px; line-height: 1.5; font-weight: 400; color: #E2E8F0; margin: 0; }
+  .c-sub { font-size: 22px; color: #94A3B8; margin: 40px 0 0; }
+  .c-shot { width: 832px; height: 560px; overflow: hidden; border: 2px solid #334155; border-radius: 6px; background: #F8FAFC; }
+  /* 본문 최대 폭(56rem)에 맞춘 940px 로 띄우고 틀(832px)에 맞게 줄인다 */
+  .c-shot iframe { width: 940px; height: 633px; border: 0; transform: scale(0.885); transform-origin: 0 0; }
+</style>
+</head>
+<body class="c">
+<div class="c-og" hidden>
+  <div class="c-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9M10 20v-6M16 20v-9M22 20v-4"/></svg>갱신 기준선</div>
+  <h1>제시받은 갱신 조건이<br>실제 갱신 계약들 사이에서 <em>어디쯤</em>인지</h1>
+  <div class="c-cards">
+    <div class="c-card"><div class="c-k">갱신요구권 행사 기록 있음</div><div class="c-v" id="rec">—</div><div class="c-s" id="rec-n">—</div></div>
+    <div class="c-card warn"><div class="c-k">행사 기록 없음</div><div class="c-v" id="unrec">—</div><div class="c-s" id="unrec-n">—</div></div>
+  </div>
+  <div class="c-foot" id="foot">—</div>
+</div>
+<div class="c-cover" hidden>
+  <div>
+    <p class="c-title">갱신 기준선</p>
+    <div class="c-bar"></div>
+    <h1>제시받은 갱신 조건이 실제 갱신 계약들 사이에서 <em>어디쯤</em>인지 봅니다.</h1>
+    <p class="c-sub" id="sub">—</p>
+  </div>
+  <div class="c-shot"><iframe id="shot" title="갱신 기준선 첫 화면" src="about:blank"></iframe></div>
+</div>
+<script type="module">
+  const kind = new URLSearchParams(location.search).get("kind") === "cover" ? "cover" : "og";
+  const $ = (s) => document.querySelector(s);
+  document.body.classList.add(kind);
+  $(`.c-${kind}`).hidden = false;
+  const A = await fetch("../dist/data/anchors.json").then((r) => r.json());
+  const pct = (v) => `${v.toFixed(2)}%`, n = (v) => v.toLocaleString("ko-KR");
+
+  if (kind === "og") {
+    $("#rec").textContent = pct(A.recorded.over5);
+    $("#rec-n").textContent = `${n(A.recorded.n)}건 중 5% 초과`;
+    $("#unrec").textContent = pct(A.unrecorded.over5);
+    $("#unrec-n").textContent = `${n(A.unrecorded.n)}건 중 5% 초과`;
+    $("#foot").textContent = `국토교통부 전월세 실거래가 · 서울 25개 자치구 · 기준일 ${A.asof}`;
+    document.body.dataset.ready = "1";
+  } else {
+    // 오른쪽은 실제 첫 화면이다. 화면이 앵커 값을 채운 뒤에야 다 됐다고 표시한다
+    $("#sub").textContent = `서울 25개 자치구 · 국토교통부 실거래 신고 자료 · 기준일 ${A.asof}`;
+    const f = $("#shot");
+    f.addEventListener("load", () => {
+      const doc = f.contentDocument;
+      const wait = () => {
+        const v = doc.querySelector("#a-rec-over")?.textContent;
+        if (!v || v === "—") { setTimeout(wait, 100); return; }
+        f.contentWindow.scrollTo(0, doc.querySelector(".hero").offsetTop - 24);
+        document.body.dataset.shot = `${v}|${doc.querySelector("#a-unrec-over").textContent}`;
+        document.body.dataset.ready = "1";
+      };
+      wait();
+    });
+    f.src = "../dist/index.html";
+  }
+</script>
+</body>
+</html>

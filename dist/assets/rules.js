@@ -121,6 +121,9 @@ export function readAmounts(text) {
 
   const found = amountsIn(body);
   if (!found.length) return { ok: false, reason: "NO_AMOUNT" };
+  // 읽은 금액 말고 금액 조각이 남아 있으면 읽지 않는다. "9억 7천2백"의 "7천2백"처럼 문법 밖 표기를
+  // 건너뛰면 9억으로 조용히 틀린다(2026-10-25 실측, 붙여 쓴 "9억7천2백"은 9억 7천이 됐다).
+  if (/\d\s*(?:억|천|백|십|만)/.test(body.replace(AMOUNT, " "))) return { ok: false, reason: "UNSUPPORTED_SYNTAX" };
   if (found.some((a) => a.v < DEPOSIT_FLOOR)) return { ok: false, reason: "UNSUPPORTED_SYNTAX" };
 
   // 보증금이 정확히 둘일 때만 "종전 → 제시"로 읽는다. 하나뿐이면 어느 쪽인지 문장이 말하지 않는다.

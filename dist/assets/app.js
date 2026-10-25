@@ -43,13 +43,13 @@ async function boot() {
     $("#f-blank-n").textContent = R.fmtN(anchors.blank_ctype?.n);
     $("#f-blank-pct").textContent = R.fmtPct(anchors.blank_ctype?.pct);
     $("#anchor-scope").textContent =
-      `모수 — ${anchors.scope}, ${R.fmtN(anchors.total_n)}건. 출처 ${anchors.source}. ${anchors.note}`;
+      `기준: ${anchors.scope}, ${R.fmtN(anchors.total_n)}건. 출처: ${anchors.source}. ${anchors.note}`;
     const gu = $("#gu");
     for (const g of index.gu) gu.add(new Option(g.nm, g.sgg), gu.options.length - 1);
   } catch (e) {
     // M-03: 스냅샷을 읽지 못해도 입력만으로 되는 산술은 계속 동작해야 한다
     S.snapshotFailed = true;
-    $("#asof-bar").textContent = "데이터를 읽지 못했습니다 — 산술 전용 모드";
+    $("#asof-bar").textContent = "데이터를 읽지 못했습니다. 마감일과 5% 상한 계산만 됩니다";
   }
   restore();
   wire();
@@ -75,7 +75,7 @@ function fillDong() {
   if (!S.shard) {
     const picked = $("#gu").value && $("#gu").value !== "OUT";
     dong.disabled = true;
-    dong.add(new Option(picked ? "데이터를 읽지 못했습니다 — 산술 전용" : "자치구를 먼저 고르세요", ""));
+    dong.add(new Option(picked ? "데이터를 읽지 못했습니다(계산만 됩니다)" : "자치구를 먼저 고르세요", ""));
     return;
   }
   dong.disabled = false;
@@ -83,8 +83,8 @@ function fillDong() {
   for (const u of S.shard.umds) dong.add(new Option(u, u));
   fillBuildings();
   $("#kind-help").textContent = R.keysFor({ kind, sgg: "x", umd: "x", seq: "x", area: 60 })[0][0] === 1
-    ? "같은 단지·같은 면적대끼리 비교합니다."
-    : "이 유형은 원천에 단지 일련번호가 없어 같은 동네·비슷한 면적 기준으로 비교합니다.";
+    ? "같은 단지의 같은 면적대끼리 비교합니다."
+    : "이 유형은 신고 자료에 단지 번호가 없어 같은 동네의 비슷한 면적끼리 비교합니다.";
 }
 
 function fillBuildings() {
@@ -129,11 +129,11 @@ function readInput() {
 
   for (const id of ["gu", "dong", "area", "expiry", "dep", "rent", "bldg", "offer"]) showErr(id, "");
 
-  if (!gu) errs.push(["gu", "자치구를 선택해 주세요. 목록에 없는 지역이면 '서울 밖'을 고르세요 — 분포 숫자 없이 기한 계산과 문안 기능만 제공합니다."]);
+  if (!gu) errs.push(["gu", "자치구를 골라 주세요. 서울이 아니면 ‘서울 밖입니다’를 고르세요. 그 경우 비교 결과 없이 마감일 계산과 답장 초안만 쓸 수 있습니다."]);
   if (gu && gu !== "OUT" && S.shard && !umd) errs.push(["dong", "법정동을 선택해 주세요."]);
   if (!(area >= 10 && area <= 300))
     errs.push(["area", area > 0 && area < 10
-      ? "전용면적을 ㎡로 넣어 주세요(예: 59.94). 평으로 넣으신 것 같습니다 — 1평은 약 3.3㎡입니다."
+      ? "전용면적을 ㎡로 넣어 주세요(예: 59.94). 평으로 넣으신 것 같습니다. 1평은 약 3.3㎡입니다."
       : "전용면적을 10㎡에서 300㎡ 사이로 넣어 주세요."]);
   if (!expiry) errs.push(["expiry", "계약 만기일을 넣어 주세요."]);
   else {
@@ -162,7 +162,7 @@ function readInput() {
     const f = findBuilding(bldgName, umd, kind);
     seq = f.seq; candidates = f.candidates;
     if (f.nm) bldgName = f.nm;   // 라벨에는 입력한 철자가 아니라 원천의 이름을 쓴다
-    if (!seq) errs.push(["bldg", "입력하신 건물명을 데이터에서 찾지 못했습니다. 아래 후보 중에서 고르시거나 건물명을 비우고 동네 기준으로 보세요. 직접 고르지 않으면 판정하지 않습니다."]);
+    if (!seq) errs.push(["bldg", "입력하신 건물명을 자료에서 찾지 못했습니다. 아래 후보에서 고르시거나, 건물명을 비우고 동네 기준으로 보세요."]);
   }
 
   const shown = new Set();   // 같은 칸에 두 메시지가 겹치면 먼저 담은 쪽이 더 구체적이다
@@ -234,27 +234,27 @@ function finish(v) {
   const i = v.input;
   if (i.used === "예") v.flags.push("O-01");
   if (i.notice === "실거주") v.flags.push("O-02");
-  if (S.anchors && (today() - new Date(S.anchors.asof)) / 86400000 >= 7) v.flags.push("O-03");
+  if (S.anchors && (today() - new Date(S.anchors.asof)) / 86400000 >= 40) v.flags.push("O-03");   // 월 1회 갱신이라 한 달을 넘겼을 때만 알린다
   if (v.convert?.kind === "NET_ADD") v.flags.push("O-06");
   return v;
 }
 
 /* ── 모드 결말 문장 — 모든 상태가 사용자가 읽는 문장으로 끝난다 ─────────── */
 const MODE_TEXT = {
-  "M-01": ["계산 범위는 서울입니다", "우리가 계산한 범위는 <strong>서울</strong>입니다. 해당 지역의 갱신 분포는 계산하지 않았습니다. 법정 기한 계산·통지 문안·3관문 알림은 그대로 쓸 수 있고, <strong>분포 숫자는 표시하지 않습니다.</strong> 서울 숫자를 다른 지역에 적용하지 않습니다."],
-  "M-02": ["마감일이 지났습니다", "갱신요구권은 이번 만기에 행사할 수 없습니다. 남은 경로는 ① 합의 갱신(5% 상한 미적용) ② 묵시적 갱신(전 임대차와 동일 조건, 인상 없음 — 다만 임대인이 이미 만료 통보를 보냈다면 성립하지 않습니다)입니다."],
-  "M-03": ["데이터를 읽지 못했습니다", "원천 데이터를 읽지 못해 <strong>분포 판정을 중단</strong>합니다. 만기 계산·5% 상한 금액·환산처럼 <strong>입력만으로 되는 산술은 그대로 동작</strong>합니다. 추정치를 만들지 않습니다."],
+  "M-01": ["서울 밖은 비교하지 않습니다", "비교 자료는 <strong>서울</strong>만 모았습니다. 마감일 계산과 5% 상한 금액, 답장 초안은 그대로 쓸 수 있지만, 서울 숫자를 다른 지역에 가져다 쓰지 않도록 <strong>비교 결과는 보여 드리지 않습니다.</strong>"],
+  "M-02": ["갱신 요구 마감일이 지났습니다", "이번 만기에는 갱신요구권을 쓸 수 없습니다. 남은 길은 둘입니다. ① 합의로 갱신하기: 5% 상한이 적용되지 않습니다. ② 묵시적 갱신: 같은 조건으로 이어지고 인상이 없습니다. 다만 집주인이 이미 만료를 통보했다면 성립하지 않습니다."],
+  "M-03": ["비교 자료를 불러오지 못했습니다", "그래서 실제 계약과의 <strong>비교는 보여 드리지 않습니다.</strong> 마감일, 5% 상한 금액, 월세 환산처럼 <strong>입력만으로 되는 계산은 그대로 됩니다.</strong>"],
   "M-04": ["월세가 섞이면 보증금만으로는 비교가 성립하지 않습니다", "월세를 보증금으로 환산하면 전환율을 몇 %로 잡느냐에 따라 5% 초과 비율이 크게 달라집니다. 그래서 인상률 백분위와 신규 시세 차액은 보여 드리지 않고, <strong>환산 부담률</strong>만 계산합니다."],
-  "M-08": ["조건을 만족하는 갱신 계약이 0건입니다", "각 단계 건수를 그대로 보여 드리고 <strong>판정 불가로 끝냅니다. 추정치를 만들지 않습니다.</strong> 5% 상한 금액과 법정 기한은 입력값만으로 계산되므로 그대로 제공합니다."],
-  "M-09": ["표본이 부족해 백분위를 내지 않습니다", "표본 없이 만든 백분위는 숫자처럼 보여도 판정이 아닙니다. 각 단계에서 몇 건이 나왔는지 그대로 보여 드립니다."],
+  "M-08": ["견줄 갱신 계약이 없습니다", "범위를 넓혀 가며 찾았지만 같은 조건의 갱신 계약이 한 건도 없어 <strong>비교 결과를 만들지 않았습니다.</strong> 5% 상한 금액과 마감일은 입력만으로 계산되므로 그대로 보여 드립니다."],
+  "M-09": ["견줄 계약이 너무 적습니다", "몇 건만으로 낸 백분위는 믿기 어려워 보여 드리지 않습니다. 범위마다 몇 건이 있었는지는 아래에 적어 둡니다."],
 };
 
 const OVERLAY_TEXT = {
-  "M-05": "단독·다가구는 원천에 <strong>건물명·지번이 없어</strong> 같은 건물끼리 비교할 수 없습니다. <strong>같은 법정동, 비슷한 연면적</strong> 기준으로 보여 드립니다.",
-  "O-01": "갱신요구권은 같은 주택에서 <strong>1회 한정</strong>입니다. 이미 행사하셨다면 이번 갱신은 합의 갱신이고 <strong>5% 상한이 적용되지 않습니다.</strong> 이 데이터에는 임차인의 갱신권 소진 이력이 <strong>없어서</strong> 입력하신 값을 그대로 신뢰합니다 — 입력이 틀리면 판정도 틀립니다.",
-  "O-02": "실거주는 갱신거절 사유입니다(주택임대차보호법 제6조의3 제1항 단서 8호). <strong>이 서비스는 실거주 주장의 진위를 판정하지 않습니다.</strong> 지금 할 일은 통보 내용을 <strong>일시·수단·발화자와 함께 기록</strong>하는 것입니다.",
-  "O-03": "이 판정의 데이터 기준일이 오래됐습니다. <strong>최근 30일 계약은 표본에서 빠질 수 있습니다.</strong>",
-  "O-06": "전환율을 계산할 수 없습니다(분모 0). 이것은 전환이 아니라 <strong>순증</strong>입니다. 연 부담률만 표시하고 <strong>전환율 분포와 비교하지 않습니다</strong> — 비교 대상이 다른 종류의 숫자입니다.",
+  "M-05": "단독·다가구는 신고 자료에 <strong>건물명과 지번이 없어</strong> 같은 건물끼리 비교할 수 없습니다. <strong>같은 법정동의 비슷한 연면적</strong>끼리 견줍니다.",
+  "O-01": "갱신요구권은 같은 집에서 <strong>한 번만</strong> 쓸 수 있습니다. 이미 쓰셨다면 이번 갱신은 합의 갱신이라 <strong>5% 상한이 적용되지 않습니다.</strong> 신고 자료에는 세입자가 이미 권리를 썼는지가 나오지 않아, 입력하신 대로 계산합니다.",
+  "O-02": "집주인의 실거주는 갱신을 거절할 수 있는 사유입니다(주택임대차보호법 제6조의3 제1항 단서 8호). <strong>그 주장이 사실인지는 이 서비스가 판단하지 않습니다.</strong> 지금 할 일은 통보받은 내용을 <strong>일시·수단·말한 사람과 함께 적어 두는 것</strong>입니다.",
+  "O-03": "데이터 기준일에서 한 달 넘게 지났습니다. <strong>그 뒤에 신고된 계약은 아직 반영되지 않았습니다.</strong>",
+  "O-06": "이 조건은 전환이 아니라 인상이라 <strong>전환율을 계산할 수 없고</strong>, 전환율 분포와도 견주지 않습니다.",
 };
 
 /* ── 렌더 ──────────────────────────────────────────────────────────────── */
@@ -288,7 +288,7 @@ function render(v) {
   if (!$("#s7").hidden) renderConvert(v);
   renderChoices(v);
   $("#s5").hidden = holdMoney;   // 문안에도 그 금액이 들어간다
-  renderGates(v);
+  $("#s6").hidden = false;   // 갱신 계약 뒤 챙길 것은 날짜를 계산하지 않는 안내라 결과가 나오면 늘 연다
   // O-02(실거주 통보)면 연다. 그 밖에도 기록이 있으면 계속 보여 준다.
   $("#s-notice").hidden = !(v.flags.includes("O-02") || loadNotices().length);
   renderNotices();
@@ -303,7 +303,7 @@ function renderTimeline(v) {
   $("#s2").hidden = false;
   const rows = [
     [w.start, "갱신 요구 기간이 열립니다", "만기 6개월 전"],
-    [w.deadline, "갱신 요구 마감", "이 날까지 임대인에게 <b>도달</b>해야 합니다(만기 2개월 전 대응일의 전날). 내용증명은 도달까지 며칠 걸리니 여유를 두세요"],
+    [w.deadline, "갱신 요구 마감", "이 날까지 집주인에게 <b>도달</b>해야 합니다. 만기일 두 달 전 같은 날짜의 하루 전입니다. 내용증명은 도착까지 며칠 걸리니 여유를 두세요"],
     [i.expiry, "계약 만기", ""],
   ];
   const tl = el("ul", "tl");
@@ -315,20 +315,21 @@ function renderTimeline(v) {
   }
   const box = $("#timeline"); box.innerHTML = ""; box.append(tl);
   if (w.note)
-    box.append(el("p", "tie", `계약 체결일이 2020년 12월 10일 이전입니다. 갱신요구 마감 기준이 다를 수 있어 두 날짜를 모두 보여 드립니다 — <b>${R.fmtDate(w.deadline)}</b> 와 <b>${R.fmtDate(w.note.alt_deadline)}</b>. 이른 쪽을 마감으로 안내합니다.`));
+    box.append(el("p", "tie", `2020년 12월 10일 이전에 맺은 계약이면 마감 기준이 다를 수 있습니다. 두 날짜(<b>${R.fmtDate(w.deadline)}</b>, <b>${R.fmtDate(w.note.alt_deadline)}</b>) 가운데 이른 쪽을 마감으로 안내합니다.`));
 
   const bar = $("#deadline-bar");
   bar.hidden = false;
   bar.innerHTML = w.d_day < 0
-    ? `<div class="dl urgent"><span class="dd">마감 경과</span><span>갱신 요구 마감 ${R.fmtDate(w.deadline)}이 ${-w.d_day}일 지났습니다.</span></div>`
-    : `<div class="dl${w.d_day <= 14 ? " urgent" : ""}"><span class="dd">${w.d_day === 0 ? "오늘이 마지막입니다" : `D-${w.d_day}`}</span><span>갱신 요구 마감 <b>${R.fmtDate(w.deadline)}</b>${w.d_day === 0 ? "" : ` — 남은 기간 ${w.d_day}일`}</span></div>`;
+    ? `<div class="dl urgent"><span class="dd">마감 지남</span><span>갱신 요구 마감일(${R.fmtDate(w.deadline)})에서 ${-w.d_day}일 지났습니다.</span></div>`
+    : `<div class="dl${w.d_day <= 14 ? " urgent" : ""}"><span class="dd">${w.d_day === 0 ? "오늘이 마지막입니다" : `D-${w.d_day}`}</span><span>갱신 요구 마감 <b>${R.fmtDate(w.deadline)}</b>${w.d_day === 0 ? "" : `, ${w.d_day}일 남았습니다`}</span></div>`;
 
+  const seoul = i.gu !== "OUT" && S.anchors;   // 서울 밖에는 서울 통계를 붙이지 않는다(M-01)
   const paths = [
-    ["갱신요구권을 행사한다", i.used === "예"
-      ? "같은 주택에서 1회 한정입니다. 이미 행사하셨다면 이번 만기에는 다시 쓸 수 없습니다."
-      : `마감까지 의사표시가 도달하면 기록이 남습니다. 서울 집계에서 행사 기록이 있는 ${R.fmtN(S.anchors?.recorded.n)}건 중 5% 초과는 ${R.fmtPct(S.anchors?.recorded.over5)}입니다.`],
-    ["합의로 갱신한다", `5% 상한이 적용되지 않습니다. 행사 기록이 없는 ${R.fmtN(S.anchors?.unrecorded.n)}건 중 ${R.fmtPct(S.anchors?.unrecorded.over5)}가 5%를 넘겼습니다.`],
-    ["아무것도 하지 않는다", "마감이 지나면 이번 만기에는 권리를 쓸 수 없습니다. 되돌릴 수 없는 유일한 칸입니다."],
+    ["갱신요구권을 행사하면", i.used === "예"
+      ? "같은 집에서는 한 번만 쓸 수 있습니다. 이미 쓰셨다면 이번에는 다시 쓸 수 없습니다."
+      : "마감까지 집주인에게 뜻이 전달되면 됩니다. 관공서 절차는 없습니다." + (seoul ? ` 서울에서 행사 기록이 있는 갱신 ${R.fmtN(S.anchors?.recorded.n)}건 가운데 5%를 넘긴 것은 ${R.fmtPct(S.anchors?.recorded.over5)}입니다.` : "")],
+    ["합의로 갱신하면", "5% 상한이 적용되지 않습니다." + (seoul ? ` 서울에서 행사 기록이 없는 갱신 ${R.fmtN(S.anchors?.unrecorded.n)}건 가운데 ${R.fmtPct(S.anchors?.unrecorded.over5)}가 5%를 넘겼습니다.` : "") + " 국토교통부 해석에 따르면 합의로 갱신한 뒤에도 갱신요구권 1회는 남습니다."],
+    ["아무것도 하지 않으면", "마감이 지나면 이번 만기에는 갱신요구권을 쓸 수 없고, 되돌릴 방법이 없습니다."],
   ];
   $("#paths").innerHTML = paths.map(([h, p]) => `<div class="p"><h3>${h}</h3><p>${p}</p></div>`).join("");
 }
@@ -355,31 +356,31 @@ function renderVerdict(v) {
         : `<li><span class="k">5% 상한이면</span><span class="v">${R.fmtMoney(v.cap.deposit)}</span></li>
       <li><span class="k">${v.cap.over ? "상한 대비 차액" : "상한 이내"}</span><span class="v ${v.cap.over ? "over" : "ok"}">${v.cap.over ? R.fmtMoney(v.cap.excess) : "초과 없음"}</span></li>`);
     head.append(f);
-    if (v.cap.over && S.anchors && !usedUp)
-      head.append(el("p", "mine", `서울 집계에서 행사 기록 없는 초과 건의 차액은 건당 중앙값 <b>${R.fmtMoney(S.anchors.excess_median)}</b>입니다.`));
+    if (v.cap.over && S.anchors && !usedUp && i.gu !== "OUT")   // 서울 밖에는 서울 통계를 붙이지 않는다(M-01)
+      head.append(el("p", "mine", `서울에서 행사 기록 없이 5%를 넘긴 갱신은 상한보다 중앙값 기준 <b>${R.fmtMoney(S.anchors.excess_median)}</b> 더 올랐습니다.`));
   }
 
   const co = $("#cohort"); co.innerHTML = "";
   if (c) {
     if (c.widened)
-      co.append(el("p", "trail", "행사 기록이 없는 갱신이 모자라 범위를 넓혔습니다 — " +
+      co.append(el("p", "trail", "견줄 계약이 모자라 범위를 넓혔습니다: " +
         v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ") +
-        `. <b>이 숫자는 ${R.LEVELS[c.level]} 기준입니다.</b>`));
+        `. <b>위 숫자는 &lsquo;${R.LEVELS[c.level]}&rsquo; 기준입니다.</b>`));
     co.append(el("ul", "facts", `
-      <li><span class="k">표본 수</span><span class="v">${R.fmtN(c.n)}건</span></li>
+      <li><span class="k">견준 계약</span><span class="v">${R.fmtN(c.n)}건</span></li>
       <li><span class="k">중앙값</span><span class="v">${R.fmtPct(c.median_pct)}</span></li>
       <li><span class="k">상위 10% 인상률</span><span class="v">${R.fmtPct(c.p90_pct)}</span></li>
-      <li><span class="k">그중 5% 초과</span><span class="v">${R.fmtN(c.over_cap_n)}건</span></li>`));
+      <li><span class="k">5% 넘긴 계약</span><span class="v">${R.fmtN(c.over_cap_n)}건</span></li>`));
     if (c.tie_at_cap_n / c.n >= 0.2)
       co.append(el("p", "tie", `이 갱신 <b>${R.fmtN(c.n)}건 중 ${R.fmtN(c.tie_at_cap_n)}건이 정확히 +5.00%</b>입니다. 5.00% 부근에서는 백분위가 한 계단씩 크게 움직입니다.`));
   } else if (v.trail) {
-    co.append(el("p", "trail", "행사 기록이 없는 갱신의 단계별 건수 — " + v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ")));
+    co.append(el("p", "trail", "범위별로 찾은 계약 수: " + v.trail.map((t) => `${t.label} <b>${R.fmtN(t.n)}건</b>`).join(" → ")));
   }
 
   const g = $("#groups"); g.innerHTML = "";
   if (v.groups) {
     const a = v.groups, max = Math.max(a.recorded.over_cap_share_pct, a.unrecorded.over_cap_share_pct, 1);
-    g.append(el("h3", null, "권리를 쓴 계약과 그렇지 않은 계약은 숫자가 다릅니다"));
+    g.append(el("h3", null, "갱신요구권 행사 기록에 따라 5% 초과 비율이 다릅니다"));
     const bars = el("div", "bars");
     for (const [name, d, warn] of [
       ["갱신요구권 행사 기록 있음", a.recorded, false],
@@ -393,7 +394,7 @@ function renderVerdict(v) {
       bars.append(row);
     }
     g.append(bars);
-    g.append(el("p", "mine", `모수 — ${esc(a.scope)}, ${R.fmtN(a.total_n)}건. 제시받은 조건은 <b>${a.mine_over_cap ? "5%를 넘는 쪽" : "5% 이내 쪽"}</b>에 있습니다.`));
+    g.append(el("p", "mine", `기준: ${esc(a.scope)}, ${R.fmtN(a.total_n)}건. 제시받은 조건은 <b>${a.mine_over_cap ? "5%를 넘습니다" : "5% 이내입니다"}</b>.`));
   }
 }
 
@@ -401,11 +402,9 @@ function renderVerdict(v) {
 function amountQuestion(v) {
   const a = v.amountCheck, i = v.input;
   return `<p>입력하신 현재 보증금은 <b>${R.fmtMoney(i.dep)}</b>입니다.
-    그런데 같은 조건(${esc(R.LEVELS[a.level])})의 <b>신규 전세 보증금 중앙값은 ${R.fmtMoney(a.median)}</b>(표본 ${R.fmtN(a.n)}건)이라,
-    입력값이 <b>${a.ratio}배</b>${a.kind === "HIGH" ? " 높습니다" : "로 낮습니다"}.</p>
-    <p><strong>0을 하나 더 치거나 덜 친 것이 아닌지만 확인해 주세요.</strong>
-    금액이 10배 틀려도 종전과 제시가 같은 배율이면 인상률은 정상으로 보여서, 비율만으로는 잡히지 않습니다.
-    실제로 분포 밖인 계약도 있으므로 <strong>맞다고 하시면 그대로 판정합니다.</strong></p>
+    같은 조건(${esc(R.LEVELS[a.level])})의 <b>신규 전세 보증금 중앙값은 ${R.fmtMoney(a.median)}</b>(${R.fmtN(a.n)}건)이라,
+    입력하신 금액이 그 <b>${a.ratio}배</b>입니다.</p>
+    <p><strong>0을 하나 더 치거나 덜 치지 않았는지 확인해 주세요.</strong> 맞다면 그대로 계산합니다.</p>
     <div class="rowbtns">
       <button type="button" class="btn primary" id="amount-ok">네, ${esc(R.fmtMoney(i.dep))} 맞습니다</button>
       <button type="button" class="btn ghost" id="amount-fix">보증금 다시 입력</button>
@@ -425,23 +424,23 @@ const cohortLabel = (v) => {
 function renderMarket(v) {
   const m = v.market, box = $("#market"); box.innerHTML = "";
   box.append(el("p", "headline", m.gap > 0
-    ? `같은 조건 <b>신규 전세</b> 보증금 중앙값은 <b>${R.fmtMoney(m.new_median)}</b>입니다. 제시받은 조건보다 <span class="big">${R.fmtMoney(m.gap)}</span> 높습니다 — 나가면 이 차액을 시장에서 다시 지불해야 합니다.`
-    : `같은 조건 <b>신규 전세</b> 보증금 중앙값은 <b>${R.fmtMoney(m.new_median)}</b>이고, 제시받은 조건이 <b>${R.fmtMoney(-m.gap)}</b> 더 높습니다.`));
+    ? `같은 조건의 <b>신규 전세</b> 보증금은 중앙값이 <b>${R.fmtMoney(m.new_median)}</b>입니다. 제시받은 조건보다 <span class="big">${R.fmtMoney(m.gap)}</span> 높아서, 나가서 새로 구하면 그만큼 더 내야 할 수 있습니다.`
+    : `같은 조건의 <b>신규 전세</b> 보증금은 중앙값이 <b>${R.fmtMoney(m.new_median)}</b>이고, 제시받은 조건이 그보다 <b>${R.fmtMoney(-m.gap)}</b> 높습니다.`));
   box.append(el("ul", "facts", `
     <li><span class="k">신규 전세 중앙값</span><span class="v">${R.fmtMoney(m.new_median)}</span></li>
-    <li><span class="k">신규 표본</span><span class="v">${R.fmtN(m.n)}건</span></li>
+    <li><span class="k">신규 계약 수</span><span class="v">${R.fmtN(m.n)}건</span></li>
     <li><span class="k">차액</span><span class="v ${m.gap > 0 ? "ok" : "over"}">${R.fmtMoney(Math.abs(m.gap))}</span></li>
     <li><span class="k">차액 비율</span><span class="v">${R.fmtPct(Math.abs(m.gap_pct), 1)}</span></li>`));
   // 모수를 값 옆에 적는다(02-SPEC DR4). 이 카드만 코호트 라벨이 없어서 "같은 조건"이
   // 어느 범위인지 화면에 없었다 — 단계가 내려갈수록 차액의 부호까지 바뀌는 숫자다.
-  box.append(el("p", "mine", `모수 — ${esc(cohortLabel({ ...v, cohort: { level: m.level } }))}의 <b>신규 전세 ${R.fmtN(m.n)}건</b>, ${R.LEVELS[m.level]} 기준.`
-    + (m.widened ? " <b>신규 표본이 모자라 범위를 넓혔습니다.</b>" : "")));
+  box.append(el("p", "mine", `기준: ${esc(cohortLabel({ ...v, cohort: { level: m.level } }))}의 <b>신규 전세 ${R.fmtN(m.n)}건</b>(${R.LEVELS[m.level]}).`
+    + (m.widened ? " <b>신규 계약이 모자라 범위를 넓혔습니다.</b>" : "")));
 }
 
 function renderConvert(v) {
   const c = v.convert, i = v.input, box = $("#convert"); box.innerHTML = "";
   if (c.kind === "NET_ADD") {
-    box.append(el("p", "headline", `이 조건은 <b>전환이 아니라 순증</b>입니다. 보증금 감액이 <b>0원</b>이라 전환율을 계산할 수 없습니다(분모 0). 월 ${R.fmtMoney(i.orent)} = 연 <b>${R.fmtMoney(i.orent * 12)}</b>, 종전 보증금 ${R.fmtMoney(i.dep)} 대비 연 <span class="big">${R.fmtPct(c.annual_rate_pct)}</span>의 추가 부담입니다.`));
+    box.append(el("p", "headline", `보증금은 그대로 두고 월세를 새로 붙이는 조건이라 <b>전환이 아니라 순수한 인상</b>입니다. 월 ${R.fmtMoney(i.orent)}을 1년으로 치면 <b>${R.fmtMoney(i.orent * 12)}</b>이고, 지금 보증금 ${R.fmtMoney(i.dep)}의 연 <span class="big">${R.fmtPct(c.annual_rate_pct)}</span>에 해당합니다.`));
   } else if (c.kind === "BOTH_UP") {
     box.append(el("p", "headline", `보증금과 월세가 <b>둘 다 올랐습니다.</b> 전환이 아니므로 전환율을 내지 않습니다. 보증금은 보증금끼리, 월세는 월세끼리 비교하세요.`));
   } else {
@@ -449,15 +448,15 @@ function renderConvert(v) {
     const d = S.anchors?.convert;
     const P = (x) => R.fmtPct(x);
     const pos = !d ? null
-      : c.annual_rate_pct > d.p75 ? `p75(${P(d.p75)})보다 높습니다`
-      : c.annual_rate_pct > d.p50 ? `중앙값(${P(d.p50)})보다 높고 p75(${P(d.p75)})보다 낮습니다`
-      : c.annual_rate_pct > d.p25 ? `p25(${P(d.p25)})와 중앙값(${P(d.p50)}) 사이입니다`
-      : `p25(${P(d.p25)})보다 낮습니다`;
-    box.append(el("p", "headline", `이 조건의 <b>환산 전환율은 연 <span class="big">${P(c.annual_rate_pct)}</span></b>입니다 (연 월세 ${R.fmtMoney(i.orent * 12)} ÷ 보증금 감액 ${R.fmtMoney(c.cut)}).`
-      + (pos ? ` 서울 전세→월세 갱신 역산 분포(n=${R.fmtN(d.n)})에서 ${pos}.` : "")));
+      : c.annual_rate_pct > d.p75 ? `상위 25% 경계(${P(d.p75)})보다 높습니다`
+      : c.annual_rate_pct > d.p50 ? `중앙값(${P(d.p50)})과 상위 25% 경계(${P(d.p75)}) 사이입니다`
+      : c.annual_rate_pct > d.p25 ? `하위 25% 경계(${P(d.p25)})와 중앙값(${P(d.p50)}) 사이입니다`
+      : `하위 25% 경계(${P(d.p25)})보다 낮습니다`;
+    box.append(el("p", "headline", `보증금을 ${R.fmtMoney(c.cut)} 낮추고 월세를 받는 조건으로, <b>환산 전환율은 연 <span class="big">${P(c.annual_rate_pct)}</span></b>입니다(1년 월세 ${R.fmtMoney(i.orent * 12)} ÷ 줄어든 보증금 ${R.fmtMoney(c.cut)}).`
+      + (pos ? ` 서울에서 전세를 월세로 바꾼 갱신 ${R.fmtN(d.n)}건 가운데 ${pos}.` : "")));
     box.append(el("p", "mine", d
-      ? "이 값은 시장 데이터에서 역산한 참고값이며 <strong>법정 전월세전환율 한도 판정이 아닙니다.</strong> 세 분포 중 <strong>표본이 가장 얇고</strong>, 단지 단위가 아니라 서울 전체 분포를 씁니다."
-      : "스냅샷을 읽지 못해 <strong>분포와 견주지 않았습니다.</strong> 이 전환율은 입력값만으로 계산한 것이며 법정 전월세전환율 한도 판정이 아닙니다."));
+      ? "이 값은 실거래에서 거꾸로 계산한 참고값이며, <strong>법정 전월세 전환율 상한을 넘었는지 판단한 것이 아닙니다.</strong> 단지가 아니라 서울 전체와 견준 값입니다."
+      : "비교 자료를 불러오지 못해 <strong>분포와 견주지 않았습니다.</strong> 이 전환율은 입력만으로 계산한 값이며, 법정 상한을 넘었는지 판단한 것이 아닙니다."));
   }
 }
 
@@ -468,19 +467,6 @@ function renderChoices(v) {
   $("#copy-btn").hidden = true;
   S.choice = null;
   $$(".choice").forEach((b) => b.setAttribute("aria-pressed", "false"));
-}
-
-function renderGates(v) {
-  $("#s6").hidden = false;
-  const exp = v.input.expiry;
-  const after = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-  const gates = [
-    [exp, "확정일자", "갱신 계약서에 확정일자를 다시 받습니다. 증액분은 새로 받아야 순위가 생깁니다."],
-    [after(exp, 30), "전세대출 연장", "대출 만기와 임대차 만기는 같은 날이 아닙니다. 따로 확인하세요."],
-    [after(exp, 30), "보증 갱신", "전세보증금반환보증은 자동 연장되지 않습니다."],
-  ];
-  $("#gates").innerHTML = gates.map(([d, t, s]) =>
-    `<li><span class="d">${R.fmtDate(d)}</span><span>${t}<small>${s}</small></span></li>`).join("");
 }
 
 /* ── 문안 ──────────────────────────────────────────────────────────────── */
@@ -521,14 +507,14 @@ function bodyLines(f) {
 }
 
 const FRAME = {
-  행사: ["안녕하세요. 계약 갱신 조건에 관해 회신드립니다. 이 계약에 대해 계약갱신요구권을 행사하고자 합니다.",
-        "아래 자료를 참고해 조건을 협의할 수 있으면 합니다. 회신 부탁드립니다. 감사합니다."],
-  합의: ["안녕하세요. 제시해 주신 갱신 조건에 관해 회신드립니다. 합의 갱신을 검토하고 있습니다.",
-        "아래 자료를 확인한 뒤 다시 말씀드리겠습니다. 회신 부탁드립니다. 감사합니다."],
+  행사: ["안녕하세요. 계약 갱신 조건에 관해 회신드립니다. 이번 계약에 대해 계약갱신요구권을 행사하겠습니다.",
+        "아래 내용을 확인해 주시고 회신 부탁드립니다. 감사합니다."],
+  합의: ["안녕하세요. 제시해 주신 갱신 조건에 관해 회신드립니다. 합의로 갱신하는 방향을 검토하고 있습니다.",
+        "아래 내용을 참고해 조건을 함께 조정할 수 있을지 여쭙습니다. 감사합니다."],
   무행동: ["안녕하세요. 제시해 주신 갱신 조건을 확인하고 있어 먼저 회신드립니다.",
           "정리되는 대로 다시 말씀드리겠습니다. 감사합니다."],
 };
-const CAVEAT = "이 문안은 법률 문서가 아닙니다. 보내기 전에 내용을 직접 확인하시고, 도달 증거가 남는 방법(내용증명·문자 등)으로 보내세요.";
+const CAVEAT = "이 초안은 법률 문서가 아닙니다. 보내기 전에 내용을 직접 확인하시고, 받았다는 증거가 남는 방법(내용증명·문자 등)으로 보내세요.";
 
 async function makeDraft() {
   const btn = $("#draft-btn"), out = $("#draft-out");
@@ -552,10 +538,10 @@ async function makeDraft() {
   out.hidden = false;
   out.innerHTML = `<div class="box">${esc(text)}</div>
     <p class="src">${source === "llm"
-      ? "인사말과 맺음말만 언어 모델이 썼고, <b>숫자가 들어간 문장은 전부 코드가 계산해 그대로 넣었습니다.</b> 모델이 쓴 부분에 숫자나 금액 표현이 있으면 폐기합니다."
-      : "문장 생성이 동작하지 않아 <b>고정 인사말</b>로 대신합니다. 숫자는 동일합니다."}
+      ? "인사말과 맺음말만 AI가 썼고, <b>숫자가 든 문장은 모두 계산 결과를 그대로 넣었습니다.</b>"
+      : "AI 인사말을 쓰지 못해 <b>기본 인사말</b>을 넣었습니다. 숫자는 같습니다."}
     ${esc(CAVEAT)}</p>`;
-  btn.disabled = false; btn.textContent = "이 숫자로 회신 문안 만들기";
+  btn.disabled = false; btn.textContent = "이 숫자로 답장 초안 만들기";
   $("#copy-btn").hidden = false;
   $("#copy-btn").dataset.text = text;
 }
@@ -564,7 +550,7 @@ async function makeDraft() {
 async function share() {
   const a = S.anchors;
   const text = a
-    ? `전월세 갱신 인상률 — 갱신요구권 행사 기록이 있는 갱신 ${R.fmtN(a.recorded.n)}건 중 5% 초과는 ${R.fmtPct(a.recorded.over5)}, 기록이 없는 ${R.fmtN(a.unrecorded.n)}건은 ${R.fmtPct(a.unrecorded.over5)}입니다. 내 조건이 실제 갱신 계약들 사이에서 어디쯤인지 확인해 보세요. (${a.scope}, 기준일 ${a.asof})`
+    ? `전월세 갱신 인상률: 갱신요구권 행사 기록이 있는 갱신 ${R.fmtN(a.recorded.n)}건 가운데 5%를 넘긴 것은 ${R.fmtPct(a.recorded.over5)}, 기록이 없는 ${R.fmtN(a.unrecorded.n)}건은 ${R.fmtPct(a.unrecorded.over5)}입니다. 제시받은 조건이 어디쯤인지 확인해 보세요. (${a.scope}, 기준일 ${a.asof})`
     : "전월세 갱신 조건이 실제 갱신 계약들 사이에서 어디쯤인지 확인하세요.";
   const url = location.origin + "/";
   try {
@@ -582,7 +568,7 @@ function wireShare(id) {
     if (r === "canceled") return;
     const label = b.lastChild;
     const before = label.textContent;
-    label.textContent = r === "failed" ? " 복사하지 못했습니다 — 주소창의 링크를 써 주세요"
+    label.textContent = r === "failed" ? " 복사하지 못했습니다. 주소창의 링크를 써 주세요"
       : r === "copied" ? " 링크를 복사했습니다" : " 공유했습니다";
     setTimeout(() => { label.textContent = before; }, 2500);
   });
@@ -620,7 +606,7 @@ function renderNotices() {
   $("#nt-export").hidden = !xs.length;
   $("#nt-list").innerHTML = xs.map((x, idx) => `<li>
       <span class="d">${esc(x.when ? x.when.replace("T", " ") : "일시 미기재")}</span>
-      <span><b>${esc(x.how)}</b> · ${esc(x.who || "발화자 미기재")}<small>${esc(x.what || "")}</small></span>
+      <span><b>${esc(x.how)}</b> · ${esc(x.who || "말한 사람 미기재")}<small>${esc(x.what || "")}</small></span>
       <button type="button" class="btn ghost nt-del" data-i="${idx}" aria-label="이 기록 삭제">삭제</button>
     </li>`).join("");
 }
@@ -637,15 +623,15 @@ function addNotice() {
 function exportNotices() {
   const xs = loadNotices().sort((a, b) => (a.when || "").localeCompare(b.when || ""));
   const body = xs.map((x, i) =>
-    `${i + 1}. ${x.when ? x.when.replace("T", " ") : "(일시 미기재)"} / ${x.how} / ${x.who || "(발화자 미기재)"}\n   ${x.what || ""}`
+    `${i + 1}. ${x.when ? x.when.replace("T", " ") : "(일시 미기재)"} / ${x.how} / ${x.who || "(말한 사람 미기재)"}\n   ${x.what || ""}`
   ).join("\n\n");
-  const text = `임대인 통보 기록\n작성 ${new Date().toLocaleString("ko-KR")}\n`
+  const text = `집주인 통보 기록\n작성 ${new Date().toLocaleString("ko-KR")}\n`
     + `${"-".repeat(40)}\n\n${body}\n\n${"-".repeat(40)}\n`
     + `이 기록은 사용자가 직접 작성한 것이며 법률 문서가 아닙니다.\n`
-    + `이 서비스는 통보의 도달 여부나 효력을 판정하지 않습니다.\n`;
+    + `이 서비스는 통보가 도달했는지와 그 효력을 판단하지 않습니다.\n`;
   const a = el("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-  a.download = "임대인-통보기록.txt";
+  a.download = "집주인-통보기록.txt";
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -660,7 +646,7 @@ function downloadICS(v) {
     `UID:${stamp(d)}-gaengsin@local`, `DTSTAMP:${stamp(today())}T000000Z`,
     `DTSTART;VALUE=DATE:${stamp(d)}`, `DTEND;VALUE=DATE:${stamp(end)}`,
     "SUMMARY:갱신요구권 행사 마감일",
-    "DESCRIPTION:이 날까지 임대인에게 도달해야 합니다. 지나면 이번 만기에는 갱신요구권을 행사할 수 없습니다.",
+    "DESCRIPTION:이 날까지 집주인에게 도달해야 합니다. 지나면 이번 만기에는 갱신요구권을 행사할 수 없습니다.",
     "BEGIN:VALARM", "TRIGGER:-P7D", "ACTION:DISPLAY", "DESCRIPTION:갱신 요구 마감 7일 전", "END:VALARM",
     "END:VEVENT", "END:VCALENDAR",
   ].join("\r\n");
@@ -704,7 +690,7 @@ function wire() {
     const c = $("#rate-confirm");
     if (Number.isFinite(p) && dep > 0 && e.target.value !== "") {
       c.hidden = false;
-      c.innerHTML = `${R.fmtPct(p)}면 보증금 <b>${R.fmtMoney(R.round0(dep * (1 + p / 100)))}</b>입니다. 맞습니까?`;
+      c.innerHTML = `${R.fmtPct(p)} 인상이면 보증금은 <b>${R.fmtMoney(R.round0(dep * (1 + p / 100)))}</b>이 됩니다.`;
     } else c.hidden = true;
   });
 
@@ -786,14 +772,14 @@ function wire() {
     try {
       await navigator.clipboard.writeText(b.dataset.text || "");
       b.lastChild.textContent = " 복사했습니다";
-    } catch { b.lastChild.textContent = " 복사하지 못했습니다 — 아래 문안을 직접 선택해 복사해 주세요"; }
+    } catch { b.lastChild.textContent = " 복사하지 못했습니다. 아래 초안을 직접 선택해 복사해 주세요"; }
   });
 
   $$(".choice").forEach((b) => b.addEventListener("click", () => {
     S.choice = b.dataset.choice;
     $$(".choice").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     const c = $("#chosen"); c.hidden = false;
-    c.innerHTML = `<b>${esc(S.choice)}</b>를 선택하셨습니다 — ${new Date().toLocaleString("ko-KR")}. 이 기록은 <strong>이 브라우저에만</strong> 남습니다.`;
+    c.innerHTML = `<b>&lsquo;${esc(b.textContent.trim())}&rsquo;</b>를 고르셨습니다(${new Date().toLocaleString("ko-KR")}). 이 선택은 <strong>이 브라우저에만</strong> 남습니다.`;
     try { localStorage.setItem(CHOICE, JSON.stringify({ choice: S.choice, at: Date.now() })); } catch {}
   }));
 }
@@ -818,14 +804,14 @@ const readLine = (p, where) =>
   // 확인 줄은 applyParsed 가 **쓰는 칸을 전부** 보여 준다. 빠진 칸이 있으면 사용자는 보지 못한 값을
   // 확인한 것이 되고, 그 값이 판정에 들어간다. 면적이 그랬다 — 코호트 자체를 바꾸는 값인데
   // 확인 줄에 없었다. 값이 없으면 "—" 로 적어 "안 건드린다"는 사실도 보이게 한다.
-  `읽은 값 — 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
-  + `, 제시 월세 <b>${p.new_monthly_manwon == null ? "—(그대로 둡니다)" : R.fmtMoney(p.new_monthly_manwon)}</b>`
+  `읽은 값: 현재 보증금 <b>${R.fmtMoney(p.cur_deposit_manwon)}</b>, 제시 보증금 <b>${R.fmtMoney(p.new_deposit_manwon)}</b>`
+  + `, 제시 월세 <b>${p.new_monthly_manwon == null ? "(읽지 못해 그대로 둡니다)" : R.fmtMoney(p.new_monthly_manwon)}</b>`
   // 면적만 모델이 준 값이 그대로 들어오던 자리였다. fmtArea 는 계약을 통과한 숫자만
   // 문자열로 만들고 그 밖에는 null 을 낸다 — 마크업이 여기로 들어올 경로가 없다.
-  + `, 전용면적 <b>${R.fmtArea(p.area_m2) ?? "—(그대로 둡니다)"}</b>`
+  + `, 전용면적 <b>${R.fmtArea(p.area_m2) ?? "(읽지 못해 그대로 둡니다)"}</b>`
   // 확인 지점의 안내는 한 구절만 둔다. 고지를 늘리면 읽히지 않는다 — 여기가 사용자가
   // 신뢰를 결정하는 자리이므로 "무엇과 대조하라"만 적는다.
-  + `. ${where} <strong>받은 문장·계약서와 대조해 주세요.</strong>`
+  + `. ${where} <strong>받은 문장·계약서와 맞는지 확인해 주세요.</strong>`
   + `<span class="rowbtns"><button type="button" class="btn primary" id="parse-ok">맞습니다, 이 값으로</button>`
   + `<button type="button" class="btn ghost" id="parse-no">직접 넣겠습니다</button></span>`;
 
@@ -841,7 +827,7 @@ async function parseText() {
   if (rule.ok) {
     S.pending = { cur_deposit_manwon: rule.cur, new_deposit_manwon: rule.next, new_monthly_manwon: rule.rent };
     out.hidden = false;
-    out.innerHTML = readLine(S.pending, "이 문장은 <strong>브라우저 안에서 읽었습니다 — 서버로 보내지 않았습니다.</strong>");
+    out.innerHTML = readLine(S.pending, "이 문장은 <strong>이 브라우저 안에서 읽었고, 서버로 보내지 않았습니다.</strong>");
     return;
   }
 
@@ -863,7 +849,7 @@ async function parseText() {
       : `문장에서 조건을 충분히 읽지 못했습니다. ${MANUAL}`;
   } catch {
     out.hidden = false;
-    out.innerHTML = `문장을 자동으로 읽지 못했습니다. ${MANUAL} 판정 기능은 그대로 동작합니다.`;
+    out.innerHTML = `문장을 자동으로 읽지 못했습니다. ${MANUAL} 계산은 그대로 됩니다.`;
   }
   btn.disabled = false; btn.textContent = "문장에서 금액 읽기";
 }

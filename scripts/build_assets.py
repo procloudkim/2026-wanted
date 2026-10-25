@@ -313,7 +313,7 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
         "asof": asof,
         "source": "국토교통부 전월세 실거래가 4종 API",
         "scope": f"서울 25개 자치구, {months[0]}~{months[-1]}, 전세→전세 갱신만",
-        "note": "월세가 섞인 계약은 보증금 단독 비교가 성립하지 않아 제외했다.",
+        "note": "월세가 섞인 계약은 보증금만으로 비교할 수 없어 뺐습니다.",   # 화면에 그대로 나간다 — 존댓말로 쓴다
         "total_n": len(renew),
         "all": summary(renew),
         "recorded": summary(rr),       # 갱신요구권 행사 기록 있음
@@ -661,6 +661,12 @@ def main(from_cache=False, retry=False):
         print(f"! B_SILENT_ZERO 아파트 0건 조합 {len(apt_zero)}건: {apt_zero[:5]}")
     for e in errs[:10]:
         print(f"! {e}")
+    if errs:
+        # 실패 조합이 남은 채로 자산을 만들면 표본이 조용히 빠진다. 2026-10-25 실측: 1,200조합 중
+        # 429개가 HTTP 429 로 빠졌는데 validate 는 통과했고 자산이 그대로 만들어졌다(행 수 30% 감소).
+        # 캐시는 위에서 이미 썼으므로 --retry 가 빠진 조합만 다시 받는다.
+        sys.exit(f"! B_PARTIAL_COLLECTION 실패 {len(errs)}조합이 남았다 — 자산을 쓰지 않는다. "
+                 "python3 scripts/build_assets.py --retry 로 채운다")
 
     records, names, renew, dropped = aggregate(rows, asof)
     meta = {"months": [ymds[0], ymds[-1]], "rows": len(rows), "renewals": len(renew)}
