@@ -160,6 +160,8 @@
 | 4 | 시크릿 교체가 **기존 배포에 즉시 반영**되는가 | **문서에 없음** | Workers 는 `wrangler secret put` 이 "creates a new version … and **deploys it immediately**" 로 문서화돼 있으나 **Pages 는 그 서술이 없다.** 대시보드 흐름은 "Select **Deploy** to implement your changes", 바인딩 문서는 재배포를 요구한다. **"배포 없이 모델을 바꾼다"는 근거가 없다** |
 | 5 | **대회 동결 규정**과 충돌하는가 | **확인 — 그런 규정이 없다** | 보관한 요강은 *제출 폼*이 마감 후 열람 전용이라 적고, 서비스에는 *심사 기간 접속 유지*만 요구한다. 서비스 수정·재배포를 금하는 조항은 없다. 이전 판이 "동결 규정"이라는 명사로 그 존재를 전제했던 것을 정정한다 |
 
+> **2026-10-25 확인.** 2번: 이 서비스의 OpenAI 프로젝트에는 **차단형 지출 한도**가 걸려 있다(대시보드 표시 "Limit enforced — Requests will start to fail when limit is reached"). 허용 모델은 gpt-5.4-mini 하나다. 실제로 한도에 닿아 본 시험은 하지 않았다. 4번: 시크릿을 바꾼 뒤에도 **이미 떠 있는 배포는 옛 값을 쓴다** — 바꾸기 전 배포 `c970d71e` 의 `/api/parse` 가 옛 무효 키로 `E_UPSTREAM` 을 냈고, 새 배포 `df6e7367` 만 새 키로 동작했다. 키를 바꾸면 반드시 재배포한다.
+
 **레버의 실제 모습.** ② 가 *Hard spend limit* 일 때만 429 → `callOpenAI` 가 던짐 → `E_UPSTREAM` → 수동 입력 폼으로 정상 강등된다(이 경로는 `test_verify.mjs` 의 "상류 500" 케이스가 고정). *Spend alert* 였다면 아무 일도 일어나지 않는다. **가장 먼저 할 일은 콘솔에서 한도의 종류를 확인하는 것이다.**
 
 ---
