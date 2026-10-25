@@ -36,11 +36,11 @@
 ├─ node scripts/test_rules.mjs                  ① 판정 산술·문장 읽기 34건
 ├─ node scripts/test_verify.mjs                 ⑤ LLM 검증층·오리진 경계 13건
 ├─ node scripts/test_contrast.mjs               ④ 색 대비 36쌍
-├─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조·프레임워크 716건
+├─ node scripts/test_anchors_docs.mjs           ③ 스냅샷↔문서·메타 대조·프레임워크 751건
 └─ node scripts/test_source.mjs                  ⑥ 소스 금지 패턴·글꼴 고지 24건
 ```
 
-**이 다섯 숫자(32·13·36쌍·716·24)는 `anchors.json` 이 아니라 각 스크립트의 실행 건수다**(`STYLE.md` §2). 앵커 대조 대상이 아니므로 대신 **각 스크립트가 자기 건수를 이 문서와 `README.md` 양쪽에서 찾는다** — 검사를 늘리고 문서를 안 고치면 그 자리에서 깨진다. 예전에 `source` 가 17 → 22 → 24 로 두 번 낡았던 것이 이 결속이 없어서였다.
+**이 다섯 숫자(34·13·36쌍·751·24)는 `anchors.json` 이 아니라 각 스크립트의 실행 건수다**(`STYLE.md` §2). 앵커 대조 대상이 아니므로 대신 **각 스크립트가 자기 건수를 이 문서와 `README.md` 양쪽에서 찾는다** — 검사를 늘리고 문서를 안 고치면 그 자리에서 깨진다. 예전에 `source` 가 17 → 22 → 24 로 두 번 낡았던 것이 이 결속이 없어서였다.
 
 실패는 `AssertionError` 와 exit 1 로 나온다. `set -e` 가 종료 코드를 받아 첫 실패에서 멈춘다. 새 프레임워크를 들이지 않았다 — 표준 라이브러리 `assert` 와 작은 스크립트뿐이고 `package.json` 이 없다.
 

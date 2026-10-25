@@ -56,7 +56,7 @@
     <p class="anchor-note"><strong>&ldquo;행사 기록 없음&rdquo;은 갱신 계약의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong>
       법정 신고서가 2지 택일만 두고 있어 미행사로 읽지만 <strong>이것은 해석이고 근거 등급은 B</strong>입니다 &mdash;
       미기재가 섞여 있어도 데이터만으로는 갈라지지 않습니다. 해석에 기대지 않는 문장은 이것입니다:
-      <strong>전세&rarr;전세 갱신의 16.91%가 5%를 넘겼습니다.</strong></p>
+      <strong>전세&rarr;전세 갱신의 <span id="a-all-over">—</span>가 5%를 넘겼습니다.</strong></p>
     <div class="rowbtns hero-cta">
       <button type="button" class="btn primary" id="demo-btn">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
@@ -376,12 +376,12 @@
 <footer class="wrap foot">
   <h2 class="sr">데이터 한계와 법률 경계</h2>
   <ol class="limits" id="limits">
-    <li>이 판정의 데이터 기준일은 <b id="f-asof">—</b>입니다. <code>계약구분</code>이 비어 판정에서 빠지는 행이 <strong>596,178행 중 13,104행(2.20%)</strong> 있고, 신고와 정정이 반영되는 데 시간이 걸리므로 <strong>최근 계약일수록 표본에서 빠질 수 있습니다.</strong></li>
+    <li>이 판정의 데이터 기준일은 <b id="f-asof">—</b>입니다. <code>계약구분</code>이 비어 판정에서 빠지는 행이 <strong><span class="n-rows">—</span>행 중 <span id="f-blank-n">—</span>행(<span id="f-blank-pct">—</span>)</strong> 있고, 신고와 정정이 반영되는 데 시간이 걸리므로 <strong>최근 계약일수록 표본에서 빠질 수 있습니다.</strong></li>
     <li>계산 범위는 <strong>서울</strong>입니다. 서울 숫자를 다른 지역에 적용하지 않습니다.</li>
-    <li>원천이 단지 일련번호를 주는 유형은 <strong>아파트뿐입니다.</strong> 오피스텔·연립·다세대·단독·다가구는 <strong>596,178행 전부</strong> 비어 있어 같은 건물끼리 비교할 수 없고, <strong>같은 법정동·비슷한 면적</strong>으로 비교합니다.</li>
+    <li>원천이 단지 일련번호를 주는 유형은 <strong>아파트뿐입니다.</strong> 오피스텔·연립·다세대·단독·다가구는 <strong><span class="n-rows">—</span>행 전부</strong> 비어 있어 같은 건물끼리 비교할 수 없고, <strong>같은 법정동·비슷한 면적</strong>으로 비교합니다.</li>
     <li>이 숫자들은 <strong>신고된 결과이지 예측이 아닙니다.</strong> 앞으로의 시세도, 협상의 결과도 예측하지 않습니다.</li>
     <li id="limit-5" hidden><strong>&ldquo;행사 기록 없음&rdquo;은 갱신 계약의 갱신요구권 칸이 비어 있다는 뜻입니다.</strong> 법정 신고서 서식이 갱신 계약에 대해 행사/미행사 2지 택일만 두고 있고 데이터 생산기관도 빈 값을 미사용으로 집계하므로 미행사로 읽지만(근거 등급 B), 공표 데이터에 미기재가 섞여 있어도 데이터만으로는 분리되지 않습니다. 신규 계약 행은 이 칸이 100% 비어 있고 그 빈 값은 &lsquo;해당 없음&rsquo;이라 <strong>이 집계에서 제외했습니다.</strong></li>
-    <li id="limit-6" hidden>위 5% 초과 비율은 <strong>월세가 0인 전세→전세 계약만</strong>으로 계산했습니다. 월세를 환산해 포함하면 <strong>35~46%</strong> 사이에서 흔들립니다.</li>
+    <li id="limit-6" hidden>위 5% 초과 비율은 <strong>월세가 없는 전세→전세 계약만</strong>으로 계산했습니다. 월세가 섞인 계약은 환산할 때 쓰는 전환율에 따라 값이 크게 달라져서 넣지 않았습니다.</li>
   </ol>
   <p class="legal strong">
     이 서비스는 신고된 실거래 데이터로 <strong>계약의 위치를 숫자로 보여 줍니다. 법률 자문을 하지 않습니다.</strong>

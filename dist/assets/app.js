@@ -37,6 +37,11 @@ async function boot() {
     $("#a-unrec-over").textContent = R.fmtPct(anchors.unrecorded.over5);
     $("#a-unrec-n").textContent = `${R.fmtN(anchors.unrecorded.n)}건 중 5% 초과`;
     $("#a-excess").textContent = R.fmtMoney(anchors.excess_median);
+    // 데이터를 다시 모으면 바뀌는 숫자는 HTML 에 박지 않는다 — 박아 두면 검사 없이 조용히 낡는다
+    $("#a-all-over").textContent = R.fmtPct(anchors.all.over5);
+    $$(".n-rows").forEach((e) => { e.textContent = R.fmtN(anchors.build.rows); });
+    $("#f-blank-n").textContent = R.fmtN(anchors.blank_ctype?.n);
+    $("#f-blank-pct").textContent = R.fmtPct(anchors.blank_ctype?.pct);
     $("#anchor-scope").textContent =
       `모수 — ${anchors.scope}, ${R.fmtN(anchors.total_n)}건. 출처 ${anchors.source}. ${anchors.note}`;
     const gu = $("#gu");
@@ -239,7 +244,7 @@ const MODE_TEXT = {
   "M-01": ["계산 범위는 서울입니다", "우리가 계산한 범위는 <strong>서울</strong>입니다. 해당 지역의 갱신 분포는 계산하지 않았습니다. 법정 기한 계산·통지 문안·3관문 알림은 그대로 쓸 수 있고, <strong>분포 숫자는 표시하지 않습니다.</strong> 서울 숫자를 다른 지역에 적용하지 않습니다."],
   "M-02": ["마감일이 지났습니다", "갱신요구권은 이번 만기에 행사할 수 없습니다. 남은 경로는 ① 합의 갱신(5% 상한 미적용) ② 묵시적 갱신(전 임대차와 동일 조건, 인상 없음 — 다만 임대인이 이미 만료 통보를 보냈다면 성립하지 않습니다)입니다."],
   "M-03": ["데이터를 읽지 못했습니다", "원천 데이터를 읽지 못해 <strong>분포 판정을 중단</strong>합니다. 만기 계산·5% 상한 금액·환산처럼 <strong>입력만으로 되는 산술은 그대로 동작</strong>합니다. 추정치를 만들지 않습니다."],
-  "M-04": ["월세가 섞이면 보증금만으로는 비교가 성립하지 않습니다", "월세를 환산해 넣으면 5% 초과 비율이 <strong>35~46%</strong>까지 흔들립니다. 인상률 백분위·신규 시세 차액 화면을 <strong>잠그고</strong> 환산 판정으로 이동합니다. 잠근 이유를 이 자리에 적어 둡니다."],
+  "M-04": ["월세가 섞이면 보증금만으로는 비교가 성립하지 않습니다", "월세를 보증금으로 환산하면 전환율을 몇 %로 잡느냐에 따라 5% 초과 비율이 크게 달라집니다. 그래서 인상률 백분위와 신규 시세 차액은 보여 드리지 않고, <strong>환산 부담률</strong>만 계산합니다."],
   "M-08": ["조건을 만족하는 갱신 계약이 0건입니다", "각 단계 건수를 그대로 보여 드리고 <strong>판정 불가로 끝냅니다. 추정치를 만들지 않습니다.</strong> 5% 상한 금액과 법정 기한은 입력값만으로 계산되므로 그대로 제공합니다."],
   "M-09": ["표본이 부족해 백분위를 내지 않습니다", "표본 없이 만든 백분위는 숫자처럼 보여도 판정이 아닙니다. 각 단계에서 몇 건이 나왔는지 그대로 보여 드립니다."],
 };

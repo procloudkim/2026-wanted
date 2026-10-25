@@ -17,6 +17,9 @@ const IDX = JSON.parse(read("dist/data/index.json"));
 const n = (v) => v.toLocaleString("ko-KR");
 const p = (v) => `${v.toFixed(2)}%`;
 const money = (v) => `${v.toLocaleString("ko-KR")}만원`;
+const eok = (v) => `${n(Math.round(v / 10000))}억원`;   // 만원 → 억원 (문서는 "약 6,254억원"처럼 쓴다)
+const rows = (v) => `${n(v)}행`;
+const gun = (v) => `${n(v)}건`;
 
 const at = (path) => path.split(".").reduce((o, k) => o[k], A);
 const COHORTS = IDX.gu.reduce((s, g) => s + g.cohorts, 0);
@@ -34,6 +37,7 @@ const REQUIRE = {
     ["by_kind.단독다가구.n", n], ["by_kind.단독다가구.nr.over5", p], ["by_kind.단독다가구.nr.p90", p],
     ["by_kind.연립다세대.n", n], ["by_kind.연립다세대.nr.over5", p], ["by_kind.연립다세대.nr.p90", p],
     ["by_kind.오피스텔.n", n], ["by_kind.오피스텔.nr.over5", p], ["by_kind.오피스텔.nr.p90", p],
+    ["all.over5", p], ["blank_ctype.n", rows], ["blank_ctype.pct", p],
   ],
   "docs/01-PRD.md": [
     ["build.rows", n], ["total_n", n],
@@ -41,17 +45,27 @@ const REQUIRE = {
     ["unrecorded.n", n], ["unrecorded.over5", p], ["unrecorded.p90", p],
     ["all.at5", p], ["all.over5", p], ["excess_median", money],
     ["ladder.1", p],
+    ["over.n", n], ["over.excess_sum", eok],
+    ["market_gap.n", n], ["market_gap.share_pct", p], ["market_gap.gap_median", money], ["market_gap.below_pct", p],
   ],
   "docs/02-SPEC.md": [
     ["total_n", n], ["recorded.n", n], ["recorded.over5", p],
     ["unrecorded.n", n], ["unrecorded.over5", p], ["excess_median", money],
     ["all.at5", p], ["convert.n", n], ["convert.p25", p], ["convert.p50", p], ["convert.p75", p],
     ["ladder.1", p], ["ladder.3", p],
+    ["market_gap.n", n], ["market_gap.share_pct", p], ["market_gap.gap_median", money], ["market_gap.below_pct", p],
+    ["blank_ctype.n", rows], ["blank_ctype.pct", p], ["build.dropped_outliers", gun],
+    // §5.3-1 유형별 표. 아파트만 1단계(단지)가 있고 나머지는 3단계에서 시작한다
+    ...["아파트", "오피스텔", "연립다세대", "단독다가구"].flatMap((k) => [
+      [`by_kind.${k}.n`, n], [`by_kind.${k}.nr.over5`, p], [`by_kind.${k}.nr.p90`, p],
+      [`by_kind.${k}.ladder.${k === "아파트" ? 1 : 3}`, p],
+    ]),
   ],
-  "docs/03-ARCHITECTURE.md": [["build.rows", n], ["total_n", n]],
+  "docs/03-ARCHITECTURE.md": [["build.rows", n], ["total_n", n], ["build.dropped_outliers", gun]],
   "docs/05-TEST.md": [
     ["total_n", n], ["fill.renewal_rows", n], ["fill.prev_deposit_missing_pct", p],
     ["fill.by_kind.아파트.rr_token_pct", p], ["fill.by_kind.단독다가구.rr_token_pct", p],
+    ["build.dropped_outliers", gun],
   ],
   // OG·트위터 메타. 화면 본문은 anchors 에서 채우는데 메타만 손으로 적혀 있다.
   "dist/index.html": [
@@ -78,6 +92,13 @@ for (const [file, want, what] of [
   ["docs/03-ARCHITECTURE.md", n(COHORTS), "코호트 수"], ["docs/03-ARCHITECTURE.md", n(BUILDINGS), "건물 색인 수"],
 ]) {
   if (!read(file).includes(want)) misses.push(`${file}: ${what} ${want} (index.json 합계)`);
+  checks++;
+}
+/* 행사 기록 있는 쪽의 유형별 5% 초과는 범위로 적는다(02-SPEC §5.3-1 "0.32~0.58%"). */
+{
+  const rr = Object.values(A.by_kind).map((k) => k.rr.over5);
+  const want = `${Math.min(...rr).toFixed(2)}~${Math.max(...rr).toFixed(2)}%`;
+  if (!read("docs/02-SPEC.md").includes(want)) misses.push(`docs/02-SPEC.md: by_kind.*.rr.over5 범위 = ${want}`);
   checks++;
 }
 assert.equal(misses.length, 0,
