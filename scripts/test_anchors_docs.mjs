@@ -59,13 +59,15 @@ const REQUIRE = {
   ],
 };
 
+/* 누락은 모아서 한 번에 보고한다. 데이터를 다시 모으면 수십 개가 한꺼번에 바뀌는데,
+ * 첫 누락에서 멈추면 고칠 목록을 한 줄씩 캐내야 했다. */
 let checks = 0;
+const misses = [];
 for (const [file, items] of Object.entries(REQUIRE)) {
   const text = read(file);
   for (const [path, fmt] of items) {
     const want = fmt(at(path));
-    assert.ok(text.includes(want),
-      `${file}: anchors.${path} = ${want} 가 본문에 없다. 스냅샷을 다시 만들었으면 이 값을 문서에 옮겨야 한다.`);
+    if (!text.includes(want)) misses.push(`${file}: anchors.${path} = ${want}`);
     checks++;
   }
 }
@@ -75,9 +77,11 @@ for (const [file, want, what] of [
   ["README.md", n(COHORTS), "코호트 수"], ["README.md", n(BUILDINGS), "건물 색인 수"],
   ["docs/03-ARCHITECTURE.md", n(COHORTS), "코호트 수"], ["docs/03-ARCHITECTURE.md", n(BUILDINGS), "건물 색인 수"],
 ]) {
-  assert.ok(read(file).includes(want), `${file}: ${what} ${want} (index.json 합계) 가 본문에 없다.`);
+  if (!read(file).includes(want)) misses.push(`${file}: ${what} ${want} (index.json 합계)`);
   checks++;
 }
+assert.equal(misses.length, 0,
+  `스냅샷 값 ${misses.length}개가 본문에 없다. 스냅샷을 다시 만들었으면 이 값들을 문서에 옮긴다:\n  ${misses.join("\n  ")}`);
 
 /* ── ② 금지 검사 ──────────────────────────────────────────────────────────
  * 초기 탐색 계열(서울시 파일)과 중간 표본의 값이 현 계열 문장에 남아 있으면 안 된다.

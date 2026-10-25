@@ -319,6 +319,9 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
         "recorded": summary(rr),       # 갱신요구권 행사 기록 있음
         "unrecorded": summary(nr),     # 행사 기록 없음
         "excess_median": excess_median(renew),
+        "over": over_stats(renew),
+        "market_gap": market_gap(renew, rows),
+        "blank_ctype": blank_ctype(rows),
         "ladder": ladder(renew),
         "convert": convert_dist(rows),
         "fill": fill_rates(rows),
@@ -390,6 +393,42 @@ def fill_rates(rows):
         "rr_token_pct": round(sum(1 for r in ren if r["rr"]) / n * 100, 2),
         "by_kind": by_kind,
     }
+
+
+def over_stats(renew):
+    """5% 초과 갱신의 수와 상한 대비 초과 차액 합계(만원, PRD D5). 행사 기록 유무를 가리지 않는다.
+    '위법 금액'이 아니라 '갱신요구권을 행사했을 때의 상한과 실제 계약의 차이'다."""
+    ex = [r["deposit"] - r["prev_deposit"] * 21 / 20 for r in renew if is_over_cap(r)]
+    return {"n": len(ex), "excess_sum": round(sum(ex))}
+
+
+def market_gap(renew, rows):
+    """갱신 보증금과 같은 단지·면적대(1단계) 신규 전세 중앙값의 차이(PRD D6, 02-SPEC R5 참조 앵커).
+    신규 전세가 MIN_N 건 이상인 1단계 코호트를 만난 갱신만 센다. 차이가 양수면 갱신이 시세보다 싸다.
+    below_pct 는 **시세보다 낮은**(차이 > 0) 비율이다 — 2026-09-18 문서의 "시세 이하 81.08%"가 이 정의다."""
+    new = {}
+    for r in rows:
+        if r["ctype"] != "신규" or r["rent"] or not r["deposit"]:
+            continue
+        lv, k = keys_for(r)[0]
+        if lv == 1:
+            new.setdefault(k, []).append(r["deposit"])
+    gaps = []
+    for r in renew:
+        lv, k = keys_for(r)[0]
+        if lv == 1 and len(new.get(k, [])) >= MIN_N:
+            gaps.append(pctile(new[k], 50) - r["deposit"])
+    if not gaps:
+        return None
+    return {"n": len(gaps), "share_pct": round(len(gaps) / len(renew) * 100, 2),
+            "gap_median": round(pctile(gaps, 50)),
+            "below_pct": round(sum(1 for g in gaps if g > 0) / len(gaps) * 100, 2)}
+
+
+def blank_ctype(rows):
+    """계약구분이 신규도 갱신도 아닌 행. 판정에서 빠지므로 화면 각주가 이 값을 그대로 쓴다."""
+    nb = sum(1 for r in rows if r["ctype"] not in ("신규", "갱신"))
+    return {"n": nb, "pct": round(nb / (len(rows) or 1) * 100, 2)}
 
 
 def excess_median(renew):
@@ -522,6 +561,14 @@ def selftest():
     assert abs(anc["exactly5_pct"] - 33.33) < 0.01
     # 초과 2건(3,000 / 1,000)의 최근접 순위 중앙값은 사사오입으로 위쪽인 3,000이다
     assert anc["excess_median"] == 3000
+    assert anc["over"] == {"n": 2, "excess_sum": 4000}           # 3,000 + 1,000 만원
+    assert anc["blank_ctype"] == {"n": 0, "pct": 0.0}
+    # 시세 비교: 픽스처의 신규 전세는 1건뿐이라 MIN_N 미만 — 지어내지 않고 None 이다
+    assert anc["market_gap"] is None
+    new5 = [dict(rows[3]) for _ in range(5)]                     # 같은 단지·면적대 신규 전세 30,000 × 5
+    mg = market_gap(renew, rows + new5)
+    # 차이 9,000 / 6,000 / 8,000 의 최근접 순위 중앙값은 8,000 이다
+    assert mg == {"n": 3, "share_pct": 100.0, "gap_median": 8000, "below_pct": 100.0}, mg
 
     # 사다리: 픽스처의 갱신 3건 중 행사 기록 없는 것은 2건뿐이라 어느 단계에서도 표본 3건을 못 만난다.
     # 행사 기록 있는 1건까지 세면 1단계 100% 가 된다 — 그것이 R3 표본을 정정하기 전의 값이었다.
