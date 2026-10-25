@@ -273,7 +273,7 @@ gh release create data-<기준일> --target <데이터를 바꾼 커밋> --title
 **함수까지 띄우려면**: `OPENAI_API_KEY` 가 있어야 문장 읽기·문안 생성이 동작한다. **여기서부터 유료 호출이 발생한다.**
 
 ```bash
-grep '^OPENAI_API_KEY=' .env > .dev.vars     # 함수에 줄 키 하나만 둔다. .dev.vars 가 없으면 wrangler 가 .env 의 키 전부를 묶는다
+grep '^OPENAI_API_KEY=' .env | tail -1 > .dev.vars   # 함수에 줄 키 하나만 둔다(같은 이름이 두 줄이면 셸처럼 마지막 값). .dev.vars 가 없으면 wrangler 가 .env 의 키 전부를 묶는다
 npx wrangler pages dev dist                  # 로컬 실행 (함수 포함)
 ```
 

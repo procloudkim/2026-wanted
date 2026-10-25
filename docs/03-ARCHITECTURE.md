@@ -233,7 +233,7 @@ functions/
 ```bash
 ./scripts/test_all.sh                        # 키 없이 도는 검증 전부 (약 3초)
 python3 scripts/build_assets.py              # .env 에서 원천 키 하나만 읽는다. 수집 → 집계 → 자산 게이트 → dist/data (약 3분)
-grep '^OPENAI_API_KEY=' .env > .dev.vars     # 로컬 함수에는 이 키 하나만 준다
+grep '^OPENAI_API_KEY=' .env | tail -1 > .dev.vars   # 로컬 함수에는 이 키 하나만 준다
 npx wrangler pages dev dist                  # 로컬 확인. 함수 포함
 npx wrangler pages deploy dist               # 배포
 ```

@@ -616,6 +616,10 @@ def selftest():
         assert service_key(p, {}) == "abc==", service_key(p, {})
         assert service_key(p, {"DATA_GO_KR_SERVICE_KEY": "env"}) == "env"
         assert service_key(os.path.join(d, "없음"), {}) is None
+        # 새 키를 아래 줄에 덧붙인 경우 — 첫 줄에서 멈추면 셸과 다른 키를 쓴다(2026-10-25 실측)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write("DATA_GO_KR_SERVICE_KEY" + "=new\n")
+        assert service_key(p, {}) == "new", service_key(p, {})
     print("selftest ok")
 
 
@@ -642,12 +646,13 @@ def service_key(path=ENV, environ=os.environ):
         return environ["DATA_GO_KR_SERVICE_KEY"]
     if not os.path.exists(path):
         return None
+    found = None
     with open(path, encoding="utf-8") as f:
         for line in f:
             name, _, value = line.strip().partition("=")
-            if name == "DATA_GO_KR_SERVICE_KEY":
-                return value.strip().strip("\"'") or None
-    return None
+            if name == "DATA_GO_KR_SERVICE_KEY":   # 같은 이름이 또 나오면 셸·dotenv 처럼 뒤의 값을 쓴다
+                found = value.strip().strip("\"'") or None
+    return found
 
 
 def main(from_cache=False, retry=False):
