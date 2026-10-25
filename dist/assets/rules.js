@@ -241,6 +241,7 @@ export function r3Percentile(rec, prev, now) {
     median_pct: nearestRank(vec, 50) / 100,
     p90_pct: nearestRank(vec, 90) / 100,
     top_share_pct: round1((above / n) * 100),
+    above_n: above,   // 양 끝(0건·전부)은 반올림한 비율로 가려낼 수 없다 — 0.04% 도 0.0 이 된다
     tie_at_cap_n: rec.nt || 0,
     over_cap_n: rec.no || 0,
     // 비교에서 뺀 쪽. 왜 뺐는지 화면에 적으려고 같은 범위의 건수와 5% 이하 비율만 싣는다.
@@ -330,18 +331,23 @@ export function r6Window(expiry, today, signed = null) {
 }
 
 /* ── R7. 환산 (월세가 섞이는 조건) ─────────────────────────────────────────
+ * 전환율의 분자는 제시 월세가 아니라 **늘어난 월세**다. 예전에는 지금 월세를 보지 않아서
+ * 월 50만원을 그대로 내는 조건이 "월세를 새로 붙인 순증"으로 나왔다(2026-10-25 문구 검토).
+ * 월세가 오르지 않으면(그대로이거나 내리면) 전환율도 부담도 내지 않는다.
  * 감액분이 0이면 전환이 아니라 순증이다. 분모 0으로 전환율을 만들지 않는다.
  * 법정 전월세전환율 비교는 구현하지 않는다 — 기준금리 데이터가 없다. */
-export function r7Convert(prevDeposit, offerDeposit, offerRent) {
-  if (!offerRent) return null;                       // 월세 없음 → R1 경로
-  const cut = prevDeposit - offerDeposit, annual = offerRent * 12;
+export function r7Convert(prevDeposit, prevRent, offerDeposit, offerRent) {
+  if (!prevRent && !offerRent) return null;          // 월세 없음 → R1 경로
+  const cut = prevDeposit - offerDeposit, add = offerRent - prevRent, annual = add * 12;
+  if (add <= 0)
+    return { kind: "NO_RENT_INCREASE", annual_rate_pct: null, compare_to_distribution: false };
   if (cut === 0)
     return { kind: "NET_ADD", annual_rate_pct: round2((annual / prevDeposit) * 100),
-             compare_to_distribution: false };
+             compare_to_distribution: false, add };
   if (cut < 0)
     return { kind: "BOTH_UP", annual_rate_pct: null, compare_to_distribution: false };
   return { kind: "CONVERT", annual_rate_pct: round2((annual / cut) * 100),
-           compare_to_distribution: true, cut };
+           compare_to_distribution: true, cut, add };
 }
 
 /* 전세→월세 갱신 역산 분포는 상수로 두지 않는다. 다른 두 분포와 같은 빌드에서 나와야

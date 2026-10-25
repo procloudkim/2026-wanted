@@ -142,6 +142,16 @@ t("R3 — 표본 3건 미만이면 백분위를 만들지 않는다", () => {
   assert.equal(r.n, 1);
 });
 
+t("R3 — 양 끝은 반올림한 비율이 아니라 건수로 가린다", () => {
+  const rec = { nr: [100, 200, 300] };                   // 1% · 2% · 3%
+  assert.equal(R.r3Percentile(rec, 10000, 10400).above_n, 0);   // 4% 는 어느 것보다도 높다
+  assert.equal(R.r3Percentile(rec, 10000, 10050).above_n, 3);   // 0.5% 는 셋 모두가 같거나 높다
+  // 2,425건 중 1건이면 0.04% 라 비율로는 0.0 이 된다(실측 최대 표본: 송파구 아파트 전체)
+  const r = R.r3Percentile({ nr: [...Array(2424).fill(100), 900] }, 10000, 10900);
+  assert.equal(r.top_share_pct, 0);
+  assert.equal(r.above_n, 1);
+});
+
 /* ── R5 이탈 차액 ──────────────────────────────────────────────────────────── */
 t("R5 — 표본 5건 미만이면 카드를 만들지 않는다", () => {
   assert.equal(R.r5Market(71000, 4, 64800), null);
@@ -226,12 +236,12 @@ t("R6 — 2020-12-10 이전 체결분은 이른 날짜를 마감으로 안내한
 
 /* ── R7 환산 ───────────────────────────────────────────────────────────────── */
 t("R7 — 세린의 두 조건", () => {
-  const a = R.r7Convert(24000, 24000, 60);               // 보증금 유지 + 월 60
+  const a = R.r7Convert(24000, 0, 24000, 60);            // 보증금 유지 + 월 60
   assert.equal(a.kind, "NET_ADD");
   assert.equal(a.annual_rate_pct, 3.0);
   assert.equal(a.compare_to_distribution, false);        // 분포와 비교하지 않는다
 
-  const b = R.r7Convert(24000, 14000, 60);               // 감액 1억 + 월 60
+  const b = R.r7Convert(24000, 0, 14000, 60);            // 감액 1억 + 월 60
   assert.equal(b.kind, "CONVERT");
   assert.equal(b.annual_rate_pct, 7.2);
   assert.equal(b.compare_to_distribution, true);
@@ -242,9 +252,23 @@ t("R7 — 세린의 두 조건", () => {
 });
 
 t("R7 — 보증금과 월세가 둘 다 오르면 전환율을 내지 않는다", () => {
-  assert.equal(R.r7Convert(24000, 26000, 60).kind, "BOTH_UP");
-  assert.equal(R.r7Convert(24000, 26000, 60).annual_rate_pct, null);
-  assert.equal(R.r7Convert(24000, 14000, 0), null);
+  assert.equal(R.r7Convert(24000, 0, 26000, 60).kind, "BOTH_UP");
+  assert.equal(R.r7Convert(24000, 0, 26000, 60).annual_rate_pct, null);
+  assert.equal(R.r7Convert(24000, 0, 14000, 0), null);
+});
+
+t("R7 — 분자는 늘어난 월세다(지금 월세를 뺀다)", () => {
+  // 월 50만원을 그대로 내는 조건이 "월세를 새로 붙인 순증"으로 나오던 결함(2026-10-25)
+  assert.equal(R.r7Convert(24000, 50, 24000, 50).kind, "NO_RENT_INCREASE");
+  // 월세를 없애고 보증금을 올리는 조건도 카드가 비지 않는다 — null 이면 화면에 아무 계산도 없다
+  assert.equal(R.r7Convert(10000, 50, 20000, 0).kind, "NO_RENT_INCREASE");
+  const a = R.r7Convert(24000, 50, 24000, 80);           // 보증금 유지 + 월 30 인상
+  assert.equal(a.kind, "NET_ADD");
+  assert.equal(a.add, 30);
+  assert.equal(a.annual_rate_pct, 1.5);                  // 360 ÷ 24,000
+  const b = R.r7Convert(24000, 50, 14000, 110);          // 감액 1억 + 월 60 인상 — 세린 ②와 같은 전환율
+  assert.equal(b.kind, "CONVERT");
+  assert.equal(b.annual_rate_pct, 7.2);
 });
 
 /* ── 코호트 키: 파이썬 빌드와 문자열까지 같아야 한다 ───────────────────────── */

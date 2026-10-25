@@ -16,6 +16,8 @@ import struct
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.request
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 KINDS = {"og": ((1200, 630), "dist/og.png"), "cover": ((1600, 900), "docs/assets/cover.png")}
@@ -45,17 +47,37 @@ def main():
     want = {"og": [rec, unrec, f"{a['recorded']['n']:,}건", f"{a['unrecorded']['n']:,}건", a["asof"]],
             "cover": [f'data-shot="{rec}|{unrec}"', a["asof"]]}
 
+    root = os.path.realpath(ROOT)
+    allowed_dir, allowed_file = os.path.join(root, "dist") + os.sep, os.path.join(root, "scripts", "cards.html")
+
     class Quiet(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=ROOT, **kwargs)
+
+        def send_head(self):
+            # 저장소 루트에는 .env 가 있다. 카드가 읽는 두 자리만 연다.
+            # 요청 문자열이 아니라 풀린 경로로 본다 — /dist/../.env 도 접두어 검사는 통과한다
+            p = os.path.realpath(self.translate_path(self.path))
+            if p != allowed_file and not p.startswith(allowed_dir):
+                self.send_error(404)
+                return None
+            return super().send_head()
 
         def log_message(self, *args):
             pass
 
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Quiet)   # 이 기계 안에서만 연다
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{srv.server_address[1]}/scripts/cards.html"
+    origin = f"http://127.0.0.1:{srv.server_address[1]}"
+    base = f"{origin}/scripts/cards.html"
     try:
+        # .env 가 없는 클론에서도 증명되게, 늘 있는 파일로 막힘을 확인한다
+        for probe in ("/README.md", "/dist/../README.md", "/dist/%2e%2e/README.md", "/scripts/make_cards.py"):
+            try:
+                urllib.request.urlopen(origin + probe, timeout=5)
+                sys.exit(f"{probe} 가 열려 있다 — 카드 서버는 dist/ 와 템플릿만 내보내야 한다")
+            except urllib.error.HTTPError as e:
+                assert e.code == 404, f"{probe}: {e.code}"
         for kind, ((w, h), out) in KINDS.items():
             url, size = f"{base}?kind={kind}", f"--window-size={w},{h}"
             dom = chrome(binary, ["--dump-dom", size, url])

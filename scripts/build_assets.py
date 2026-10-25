@@ -37,6 +37,7 @@ SVC = {
     "아파트": ("RTMSDataSvcAptRent", "aptNm", "excluUseAr", 1),
     "오피스텔": ("RTMSDataSvcOffiRent", "offiNm", "excluUseAr", 3),
     "연립다세대": ("RTMSDataSvcRHRent", "mhouseNm", "excluUseAr", 3),
+    # 단독다가구의 totalFloorAr 는 건물 전체가 아니라 계약한 부분의 면적이다(실측 중앙값 30㎡, 2026-10-25)
     "단독다가구": ("RTMSDataSvcSHRent", None, "totalFloorAr", 3),
 }
 
@@ -298,6 +299,10 @@ def shard(records, names, asof, meta):
     return out
 
 
+def ym_ko(ym):
+    return f"{str(ym)[:4]}년 {int(str(ym)[4:6])}월"
+
+
 def anchors(renew, rows, asof, months, dropped, errs, zeros):
     """서울 전체 상수. 모수를 값과 같은 자리에 적어 화면이 분모를 섞지 못하게 한다(02-SPEC DR4)."""
     by_kind = {}
@@ -311,8 +316,9 @@ def anchors(renew, rows, asof, months, dropped, errs, zeros):
     nr = [r for r in renew if not r["rr"]]
     return {
         "asof": asof,
-        "source": "국토교통부 전월세 실거래가 4종 API",
-        "scope": f"서울 25개 자치구, {months[0]}~{months[-1]}, 전세→전세 갱신만",
+        # 두 문자열은 화면·공유 문구에 그대로 나간다 — 연월 코드(202511)나 API 같은 개발 용어를 쓰지 않는다
+        "source": "국토교통부 전월세 실거래가 공개 자료(아파트·오피스텔·연립다세대·단독다가구)",
+        "scope": f"서울 25개 자치구, {ym_ko(months[0])}~{ym_ko(months[-1])} 계약, 전세를 전세로 갱신한 계약",
         "note": "월세가 섞인 계약은 보증금만으로 비교할 수 없어 뺐습니다.",   # 화면에 그대로 나간다 — 존댓말로 쓴다
         "total_n": len(renew),
         "all": summary(renew),
